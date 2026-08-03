@@ -1,0 +1,108 @@
+[package]
+name = "agy-search"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Source-backed web research CLI for Google Antigravity"
+license = "MIT"
+repository = "https://github.com/happycastle114/agy-search"
+homepage = "https://github.com/happycastle114/agy-search"
+readme = "README.md"
+keywords = ["antigravity", "cli", "crawl", "research", "search"]
+categories = ["command-line-utilities"]
+publish = false
+
+[package.metadata.dist]
+dist = true
+
+[dependencies]
+clap = { version = "=4.6.5", features = ["derive", "env"] }
+schemars = "=1.2.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+tempfile = "=3.27.0"
+thiserror = "=2.0.19"
+tokio = { version = "=1.53.1", features = ["io-util", "macros", "process", "rt", "time"] }
+url = { version = "=2.5.8", features = ["serde"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "=0.31.3", features = ["process", "signal"] }
+
+[dev-dependencies]
+assert_cmd = "=2.2.2"
+predicates = "=3.1.4"
+proptest = "=1.11.0"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+[lints.rust]
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+unused_must_use = "deny"
+elided_lifetimes_in_paths = "warn"
+non_ascii_idents = "deny"
+trivial_numeric_casts = "warn"
+unused_lifetimes = "warn"
+single_use_lifetimes = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+mem_forget = "deny"
+as_underscore = "deny"
+dbg_macro = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+use_debug = "warn"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+allow_attributes_without_reason = "warn"
+unnecessary_to_owned = "warn"
+redundant_clone = "warn"
+redundant_pub_crate = "allow"
+large_stack_arrays = "warn"
+vec_init_then_push = "warn"
+
+# Config for 'dist'
+[workspace.metadata.dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# Which actions to run on pull requests
+pr-run-mode = "skip"
+# The installers to generate for each app
+installers = ["shell"]
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu"]
+# Custom message to display on successful install
+install-success-msg = "agy-search installed. Run 'agy-search status' to verify Antigravity."
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Whether to install an updater program
+install-updater = false

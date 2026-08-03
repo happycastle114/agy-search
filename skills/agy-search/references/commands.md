@@ -2,7 +2,7 @@
 
 ## Global contract
 
-Put global options before the subcommand:
+Global options may appear before or after the subcommand:
 
 ```bash
 agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \

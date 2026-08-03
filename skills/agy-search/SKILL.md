@@ -18,8 +18,17 @@ agy-search status
 ```
 
 If `agy-search` is unavailable, stop and report that installation is required.
-Do not silently switch providers. Run `agy-search models` before pinning a model;
-never invent or cache a model slug.
+When installation is in scope, use the release installer documented by the
+project:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/happycastle114/agy-search/releases/latest/download/agy-search-installer.sh | sh
+```
+
+Do not silently switch providers. After installation, repeat both preflight
+commands. Run `agy-search models` before pinning a model; never invent or cache
+a model slug.
 
 ## Choose an operation
 
