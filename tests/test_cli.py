@@ -157,3 +157,28 @@ def test_invalid_source_and_unknown_model_use_stable_exit_codes(fake_agy: Path) 
     assert unknown_model.exit_code == CliExitCode.MODEL
     assert invalid_source.stdout == ""
     assert unknown_model.stdout == ""
+
+
+def test_relative_executable_is_resolved_before_isolated_content_run() -> None:
+    # Given: a valid agy executable path relative to the invocation directory
+    relative_agy = Path("tests/fixtures/fake_agy.py")
+
+    # When: a content operation changes into its isolated workspace
+    result = _invoke(relative_agy, ["research", "fixture"])
+
+    # Then: the executable remains launchable through its resolved path
+    assert result.exit_code == CliExitCode.SUCCESS
+    assert ResearchResponse.model_validate_json(result.stdout).object == "research"
+
+
+def test_missing_executable_in_content_run_is_sanitized(tmp_path: Path) -> None:
+    # Given: an absolute executable path that does not exist
+    missing_agy = tmp_path / "missing-agy"
+
+    # When: a content operation enters and exits its isolated workspace
+    result = _invoke(missing_agy, ["search", "fixture"])
+
+    # Then: context cleanup preserves the typed public failure without a traceback
+    assert result.exit_code == CliExitCode.UNAVAILABLE
+    assert result.stdout == ""
+    assert result.stderr == "error: agy unavailable\n"

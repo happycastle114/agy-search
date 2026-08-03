@@ -8,7 +8,7 @@ class AgySearchError(Exception):
     """Base class for expected standalone CLI failures."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class InvalidModelSlugError(AgySearchError):
     """A requested model cannot be represented as one argv value."""
 
@@ -20,7 +20,7 @@ class InvalidModelSlugError(AgySearchError):
         return "invalid model slug"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class InvalidCommandError(AgySearchError):
     """A downstream command contract is invalid."""
 
@@ -32,7 +32,7 @@ class InvalidCommandError(AgySearchError):
         return "invalid agy command"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class ExecutableUnavailableError(AgySearchError):
     """The configured downstream executable could not be launched."""
 
@@ -45,7 +45,7 @@ class ExecutableUnavailableError(AgySearchError):
         return "agy unavailable"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class ProcessTimeoutError(AgySearchError):
     """A bounded downstream invocation exceeded its deadline."""
 
@@ -57,7 +57,7 @@ class ProcessTimeoutError(AgySearchError):
         return "agy timed out"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class ProcessFailedError(AgySearchError):
     """The downstream process exited unsuccessfully."""
 
@@ -70,7 +70,7 @@ class ProcessFailedError(AgySearchError):
         return "agy process failed"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class OutputInvalidError(AgySearchError):
     """Antigravity output failed the source-backed response contract."""
 
@@ -82,7 +82,7 @@ class OutputInvalidError(AgySearchError):
         return "agy output invalid"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class UnknownModelError(AgySearchError):
     """A requested model was absent from live model discovery."""
 
@@ -94,7 +94,7 @@ class UnknownModelError(AgySearchError):
         return "unknown agy model"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class OutputWriteError(AgySearchError):
     """A requested JSON output target could not be written atomically."""
 

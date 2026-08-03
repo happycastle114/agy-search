@@ -62,7 +62,7 @@ def configure(
     except InvalidModelSlugError as error:
         raise typer.BadParameter(_MODEL_PARAMETER_MESSAGE) from error
     context.obj = RuntimeOptions(
-        agy_path=agy_path,
+        agy_path=_resolve_executable(agy_path),
         model=selected_model,
         effort=effort,
         timeout_seconds=timeout,
@@ -186,6 +186,12 @@ def _query_text(value: str) -> str:
     if not normalized or len(text.encode("utf-8")) > _STDIN_LIMIT_BYTES:
         raise typer.BadParameter(_STDIN_PARAMETER_MESSAGE)
     return normalized
+
+
+def _resolve_executable(value: str) -> str:
+    candidate = Path(value).expanduser()
+    is_path = candidate.is_absolute() or candidate.parent != Path()
+    return str(candidate.resolve()) if is_path else value
 
 
 def _request[RequestT: BoundaryModel](
