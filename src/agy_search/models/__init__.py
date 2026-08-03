@@ -1,5 +1,6 @@
 """Public request and response boundaries."""
 
+from agy_search.models.discovery import ModelsResponse, StatusResponse
 from agy_search.models.requests import (
     CrawlRequest,
     ExtractRequest,
@@ -30,10 +31,12 @@ __all__ = [
     "MapLink",
     "MapRequest",
     "MapResponse",
+    "ModelsResponse",
     "ResearchFinding",
     "ResearchRequest",
     "ResearchResponse",
     "SearchRequest",
     "SearchResponse",
+    "StatusResponse",
     "WebSource",
 ]

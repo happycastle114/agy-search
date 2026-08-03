@@ -75,3 +75,14 @@ class AgyResearchTool(StrEnum):
     SEARCH_WEB = "search_web"
     READ_URL_CONTENT = "read_url_content"
     CALL_MCP_TOOL = "call_mcp_tool"
+
+
+@unique
+class ContentOperation(StrEnum):
+    """Schema-constrained content operations delegated to Antigravity."""
+
+    SEARCH = "search"
+    EXTRACT = "extract"
+    MAP = "map"
+    CRAWL = "crawl"
+    RESEARCH = "research"
