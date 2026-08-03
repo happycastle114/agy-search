@@ -1,6 +1,6 @@
 [package]
 name = "agy-search"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
 description = "Source-backed web research CLI for Google Antigravity"
@@ -43,7 +43,6 @@ panic = "abort"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
 
 [lints.rust]
 unsafe_code = "forbid"

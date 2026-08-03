@@ -101,6 +101,19 @@ executable override while invoking this same binary.
 The skill saves potentially large responses under `.agy-search/` and reads only
 the needed fields, limiting context use without losing citation URLs.
 
+## Performance
+
+The distribution binary starts a fresh process in under 2 ms on the measured
+Apple Silicon development host. Linux x86-64 CI guards a 1.20 MiB binary-size
+budget. Real content latency is dominated by Antigravity web tools and model
+execution, not the Rust wrapper.
+
+Leave `--model` unset for the fastest normal path. Pinning a model intentionally
+runs fresh `agy models` discovery first so an invalid slug keeps its stable exit
+contract; use it when reproducibility matters, not by default. See
+[docs/performance.md](docs/performance.md) for the benchmark method and measured
+boundaries.
+
 ## Output and failure contract
 
 Each content response has an `object` discriminator: `search`, `extract`, `map`,
@@ -140,7 +153,7 @@ high-stakes claims.
 cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features --locked
-cargo build --release --locked
+cargo build --profile dist --locked
 ```
 
 Real authenticated tests are ignored by default so CI cannot spend Antigravity
