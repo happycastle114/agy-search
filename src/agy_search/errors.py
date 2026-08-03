@@ -80,3 +80,27 @@ class OutputInvalidError(AgySearchError):
     def __str__(self) -> str:
         """Keep private model output out of public diagnostics."""
         return "agy output invalid"
+
+
+@dataclass(frozen=True, slots=True)
+class UnknownModelError(AgySearchError):
+    """A requested model was absent from live model discovery."""
+
+    model: str
+
+    @override
+    def __str__(self) -> str:
+        """Return a stable public message without listing account models."""
+        return "unknown agy model"
+
+
+@dataclass(frozen=True, slots=True)
+class OutputWriteError(AgySearchError):
+    """A requested JSON output target could not be written atomically."""
+
+    reason: str
+
+    @override
+    def __str__(self) -> str:
+        """Return a stable public message without exposing local paths."""
+        return "output write failed"
