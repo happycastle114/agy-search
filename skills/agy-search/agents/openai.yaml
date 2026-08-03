@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agy Search"
+  short_description: "Source-backed web research through Antigravity"
+  default_prompt: "Use $agy-search to research this topic with validated web sources and citations."
