@@ -27,3 +27,51 @@ class CliExitCode(IntEnum):
     UPSTREAM = 5
     OUTPUT = 6
     MODEL = 7
+
+
+@unique
+class AgyRunMode(StrEnum):
+    """Supported non-interactive Antigravity execution modes."""
+
+    PLAN = "plan"
+
+
+@unique
+class AgyOutputFormat(StrEnum):
+    """Machine-readable Antigravity output formats used by this CLI."""
+
+    STREAM_JSON = "stream-json"
+
+
+@unique
+class AgyEffort(StrEnum):
+    """Official Antigravity reasoning-effort values."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+@unique
+class AgyEventName(StrEnum):
+    """Antigravity event variants consumed at the trust boundary."""
+
+    INIT = "init"
+    STEP_UPDATE = "step_update"
+    RESULT = "result"
+
+
+@unique
+class AgyStepType(StrEnum):
+    """Step variants relevant to source-evidence collection."""
+
+    TOOL = "tool"
+
+
+@unique
+class AgyResearchTool(StrEnum):
+    """Antigravity tools that can provide live web evidence."""
+
+    SEARCH_WEB = "search_web"
+    READ_URL_CONTENT = "read_url_content"
+    CALL_MCP_TOOL = "call_mcp_tool"
