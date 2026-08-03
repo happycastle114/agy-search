@@ -65,6 +65,9 @@ agy-search research "Compare current agent web research CLIs" --max-sources 10
 agy-search research "topic" -o .agy-search/research.json
 ```
 
+`--json` is accepted on every command for explicit script compatibility; JSON
+is already the default and only success format.
+
 Global options go before the command:
 
 ```bash
@@ -97,7 +100,9 @@ The repository ships
 a concise
 workflow skill that teaches agents when to search, extract, map, crawl, or
 escalate to research. Install that folder in the skill directory used by your
-agent, or use the separately published OpenCode plugin that bundles it.
+agent, or use the separately published OpenCode plugin that bundles it. The
+Python wheel also contains the same folder under
+`agy_search/skills/agy-search`, so wheel-only mirrors do not lose the skill.
 
 The skill intentionally saves potentially large results under `.agy-search/`
 and reads only the needed fields, reducing context use while preserving the
@@ -127,6 +132,8 @@ session identifiers and tool payloads are not included in public output.
 - Launches `agy` with direct argv, never through a shell.
 - Uses plan mode, `stream-json`, and a generated JSON Schema.
 - Requires evidence that an appropriate live web tool actually ran.
+- Counts only completed built-in `search_web` or `read_url_content` steps;
+  generic MCP calls and merely started tool steps do not satisfy provenance.
 - Runs content work in a marker-owned temporary directory and removes only that
   exact directory.
 - Does not pass `--dangerously-skip-permissions` or automate Antigravity login.
@@ -148,3 +155,14 @@ uv build
 
 Real authenticated tests are opt-in so normal CI does not spend Antigravity
 credits.
+
+```bash
+AGY_SEARCH_RUN_REAL_E2E=1 \
+AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
+AGY_SEARCH_REAL_MODEL=gemini-3.6-flash-low \
+uv run pytest -q -s -m real_agy tests/test_real_agy.py
+```
+
+That gate re-discovers the model and exercises real `stream-json` events for
+search, extract, map, crawl, and research. Never put Antigravity credentials in
+the repository or CI variables for this test.

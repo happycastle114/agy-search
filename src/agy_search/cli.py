@@ -1,5 +1,6 @@
 """Standalone Typer surface for source-backed Antigravity research."""
 
+import math
 import sys
 import tempfile
 from pathlib import Path
@@ -33,6 +34,7 @@ _STDIN_LIMIT_BYTES = 100 * 1024
 _MODEL_PARAMETER_MESSAGE = "model must be one non-empty slug"
 _REQUEST_PARAMETER_MESSAGE = "request values failed validation"
 _STDIN_PARAMETER_MESSAGE = "stdin must be non-empty and at most 100 KiB"
+_TIMEOUT_PARAMETER_MESSAGE = "timeout must be a finite number between 1 and 1800 seconds"
 
 type RequestValue = str | int | bool | None | tuple[str, ...]
 
@@ -57,6 +59,8 @@ def configure(
     if version:
         typer.echo(__version__)
         raise typer.Exit
+    if not math.isfinite(timeout):
+        raise typer.BadParameter(_TIMEOUT_PARAMETER_MESSAGE, param_hint="--timeout")
     try:
         selected_model = ModelSlug(model) if model is not None else None
     except InvalidModelSlugError as error:
@@ -74,6 +78,7 @@ def configure(
 def status(
     context: typer.Context,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Check agy availability, version, authentication, and model discovery."""
     _invoke(context, command=CliCommand.STATUS, request=None, output=output)
@@ -83,6 +88,7 @@ def status(
 def models(
     context: typer.Context,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """List model slugs dynamically reported by the current agy account."""
     _invoke(context, command=CliCommand.MODELS, request=None, output=output)
@@ -97,6 +103,7 @@ def search(
     country: Annotated[str | None, typer.Option()] = None,
     max_tokens_per_page: Annotated[int | None, typer.Option(min=1)] = None,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Discover live web sources for a query."""
     request = _request(
@@ -116,6 +123,7 @@ def extract(
     urls: Annotated[list[str], typer.Argument(help="One or more explicit HTTP(S) URLs.")],
     query: Annotated[str | None, typer.Option()] = None,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Extract content from explicit web pages."""
     request = _request(ExtractRequest, urls=tuple(urls), query=query)
@@ -130,6 +138,7 @@ def map_command(
     instructions: Annotated[str | None, typer.Option()] = None,
     allow_external: Annotated[bool, typer.Option()] = False,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Discover a bounded same-origin website URL map."""
     request = _request(
@@ -150,6 +159,7 @@ def crawl(
     instructions: Annotated[str | None, typer.Option()] = None,
     allow_external: Annotated[bool, typer.Option()] = False,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Read a bounded set of same-origin website pages."""
     request = _request(
@@ -168,6 +178,7 @@ def research(
     query: Annotated[str, typer.Argument(help="Question text, or - to read stdin.")],
     max_sources: Annotated[int, typer.Option(min=1, max=20)] = 10,
     output: Annotated[Path | None, typer.Option("-o", "--output")] = None,
+    _json: Annotated[bool, typer.Option("--json", help="Emit canonical JSON (default).")] = False,
 ) -> None:
     """Produce a multi-source synthesis with validated citations."""
     request = _request(

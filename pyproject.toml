@@ -44,6 +44,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/agy_search"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"skills/agy-search" = "agy_search/skills/agy-search"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "/LICENSE",
@@ -64,7 +67,7 @@ markers = ["real_agy: opt-in tests requiring authenticated Google Antigravity CL
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -91,7 +94,7 @@ docstring-code-format = true
 typeCheckingMode = "all"
 pythonVersion = "3.12"
 pythonPlatform = "All"
-include = ["src", "tests"]
+include = ["src", "tests", "scripts"]
 exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
 reportUnusedCallResult = "warning"
 reportUnnecessaryTypeIgnoreComment = "error"

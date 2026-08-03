@@ -69,12 +69,18 @@ class AgyStepType(StrEnum):
 
 
 @unique
+class AgyStepState(StrEnum):
+    """Terminal step states accepted as completed tool evidence."""
+
+    DONE = "DONE"
+
+
+@unique
 class AgyResearchTool(StrEnum):
     """Antigravity tools that can provide live web evidence."""
 
     SEARCH_WEB = "search_web"
     READ_URL_CONTENT = "read_url_content"
-    CALL_MCP_TOOL = "call_mcp_tool"
 
 
 @unique

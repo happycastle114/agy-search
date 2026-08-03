@@ -18,6 +18,7 @@ def _stream(structured_output: JsonObject, tool: str) -> bytes:
         {
             "event": "step_update",
             "step_update": {
+                "state": "DONE",
                 "step_type": "tool",
                 "tool_info": {"name": tool},
             },
@@ -85,6 +86,9 @@ async def test_search_builds_schema_constrained_isolated_run(tmp_path: Path) -> 
     assert "--json-schema" in request.command
     assert request.command[request.command.index("--model") + 1] == "fixture-model"
     assert request.command[request.command.index("--effort") + 1] == "high"
+    prompt = request.command[request.command.index("-p") + 1]
+    assert "built-in search_web" in prompt
+    assert "Do not use call_mcp_tool" in prompt
 
 
 @pytest.mark.anyio

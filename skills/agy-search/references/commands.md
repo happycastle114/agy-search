@@ -11,26 +11,27 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
 
 - Set `AGY_SEARCH_AGY_PATH` instead of `--agy-path` when appropriate.
 - Discover `SLUG` with `agy-search models` in the current environment.
-- Successful stdout is canonical JSON. Diagnostics use stderr.
+- Successful stdout is canonical JSON. Diagnostics use stderr. `--json` is an
+  accepted explicit compatibility flag on every subcommand.
 - Add `-o PATH` to atomically write JSON and keep stdout empty.
 - Use query `-` to read up to 100 KiB from stdin for `search` and `research`.
 
 ## Operations
 
 ```bash
-agy-search status [-o PATH]
-agy-search models [-o PATH]
+agy-search status [--json] [-o PATH]
+agy-search models [--json] [-o PATH]
 
 agy-search search QUERY [-n N|--max-results N] [--domain DOMAIN]... \
-  [--country COUNTRY] [--max-tokens-per-page N] [-o PATH]
+  [--country COUNTRY] [--max-tokens-per-page N] [--json] [-o PATH]
 
-agy-search extract URL... [--query TEXT] [-o PATH]
+agy-search extract URL... [--query TEXT] [--json] [-o PATH]
 
-agy-search map URL [--limit N] [--instructions TEXT] [--allow-external] [-o PATH]
+agy-search map URL [--limit N] [--instructions TEXT] [--allow-external] [--json] [-o PATH]
 
-agy-search crawl URL [--limit N] [--instructions TEXT] [--allow-external] [-o PATH]
+agy-search crawl URL [--limit N] [--instructions TEXT] [--allow-external] [--json] [-o PATH]
 
-agy-search research QUERY [--max-sources N] [-o PATH]
+agy-search research QUERY [--max-sources N] [--json] [-o PATH]
 ```
 
 Bounds:

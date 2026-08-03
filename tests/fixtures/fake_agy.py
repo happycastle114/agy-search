@@ -31,6 +31,7 @@ def _emit(structured_output: JsonObject, tool: str) -> None:
         {
             "event": "step_update",
             "step_update": {
+                "state": "DONE",
                 "step_type": "tool",
                 "tool_info": {"name": tool},
             },

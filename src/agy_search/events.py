@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agy_search.enums import AgyEventName, AgyResearchTool, AgyStepType
+from agy_search.enums import AgyEventName, AgyResearchTool, AgyStepState, AgyStepType
 from agy_search.errors import OutputInvalidError
 from agy_search.models.common import BoundaryModel
 
@@ -33,6 +33,7 @@ class _StepUpdate(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, extra="ignore")
 
     step_type: str
+    state: str | None = None
     tool_info: _ToolInfo | None = None
 
 
@@ -111,7 +112,11 @@ def _collect_research_tools(events: tuple[_Event, ...]) -> tuple[AgyResearchTool
         if _event_name(event.event) is not AgyEventName.STEP_UPDATE:
             continue
         step = event.step_update
-        if step is None or _step_type(step.step_type) is not AgyStepType.TOOL:
+        if (
+            step is None
+            or _step_type(step.step_type) is not AgyStepType.TOOL
+            or _step_state(step.state) is not AgyStepState.DONE
+        ):
             continue
         if step.tool_info is None:
             continue
@@ -140,6 +145,13 @@ def _event_name(value: str) -> AgyEventName | None:
 def _step_type(value: str) -> AgyStepType | None:
     try:
         return AgyStepType(value)
+    except ValueError:
+        return None
+
+
+def _step_state(value: str | None) -> AgyStepState | None:
+    try:
+        return AgyStepState(value) if value is not None else None
     except ValueError:
         return None
 

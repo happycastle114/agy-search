@@ -95,7 +95,7 @@ def test_search_reads_dash_query_and_writes_canonical_json(fake_agy: Path) -> No
     # When: the search command executes
     result = _invoke(
         fake_agy,
-        ["--model", "fixture-model", "search", "-", "--max-results", "1"],
+        ["--model", "fixture-model", "search", "-", "--max-results", "1", "--json"],
         input_text="stdin query\n",
     )
 
@@ -182,3 +182,16 @@ def test_missing_executable_in_content_run_is_sanitized(tmp_path: Path) -> None:
     assert result.exit_code == CliExitCode.UNAVAILABLE
     assert result.stdout == ""
     assert result.stderr == "error: agy unavailable\n"
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+def test_non_finite_timeout_is_rejected_without_traceback(value: str) -> None:
+    # Given: a floating-point token that is not a bounded finite deadline
+    # When: it reaches the public option boundary
+    result = _RUNNER.invoke(app, ["--timeout", value, "status"])
+
+    # Then: Typer returns a sanitized usage failure before constructing a runtime
+    assert result.exit_code == CliExitCode.USAGE
+    assert result.exception is not None
+    assert "Traceback" not in result.stderr
+    assert "finite number" in result.stderr or "range" in result.stderr
