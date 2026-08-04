@@ -26,5 +26,5 @@ jobs:
         run: cargo build --profile dist --locked
       - name: Smoke-test the standalone artifact
         run: |
-          test "$(./target/dist/agy-search --version)" = "agy-search 0.2.1"
+          test "$(./target/dist/agy-search --version)" = "agy-search 0.2.2"
           test "$(stat -c %s ./target/dist/agy-search)" -lt 1258291

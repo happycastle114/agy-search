@@ -1,6 +1,6 @@
 [package]
 name = "agy-search"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.88"
 description = "Source-backed web research CLI for Google Antigravity"
@@ -103,5 +103,6 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 install-success-msg = "agy-search installed. Run 'agy-search status' to verify Antigravity."
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
-# Whether to install an updater program
+# Keep the verified application archive as the installer's only executable payload.
+# Updating is done by rerunning the same release installer.
 install-updater = false

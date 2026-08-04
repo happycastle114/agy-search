@@ -59,6 +59,56 @@ fn executes_all_five_content_operations() {
 }
 
 #[test]
+fn preserves_explicit_date_metadata_without_inventing_updates() {
+    let search = json_stdout(&[
+        "--model",
+        "fixture-model",
+        "--effort",
+        "high",
+        "search",
+        "explicit-date",
+    ]);
+    assert_eq!(
+        search.pointer("/results/0/date"),
+        Some(&json!("2026-08-03"))
+    );
+    assert_eq!(
+        search.pointer("/results/0/last_updated"),
+        Some(&Value::Null)
+    );
+
+    let with_update = json_stdout(&["search", "explicit-update"]);
+    assert_eq!(
+        with_update.pointer("/results/0/date"),
+        Some(&json!("2026-08-03"))
+    );
+    assert_eq!(
+        with_update.pointer("/results/0/last_updated"),
+        Some(&json!("2026-08-04"))
+    );
+
+    let without_metadata = json_stdout(&["search", "undated-source"]);
+    assert_eq!(
+        without_metadata.pointer("/results/0/date"),
+        Some(&Value::Null)
+    );
+    assert_eq!(
+        without_metadata.pointer("/results/0/last_updated"),
+        Some(&Value::Null)
+    );
+
+    let research = json_stdout(&["research", "explicit-date"]);
+    assert_eq!(
+        research.pointer("/sources/0/date"),
+        Some(&json!("2026-08-03"))
+    );
+    assert_eq!(
+        research.pointer("/sources/0/last_updated"),
+        Some(&Value::Null)
+    );
+}
+
+#[test]
 fn reads_search_query_from_stdin() {
     command()
         .args(["--model", "fixture-model", "search", "-", "--json"])

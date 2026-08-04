@@ -6,8 +6,10 @@ mapping, bounded crawling, and cited research. It needs no separate search API
 key and no Python or Node.js runtime.
 
 Antigravity 1.1.8 added print-mode `json`, `stream-json`, and custom JSON Schema
-enforcement. `agy-search` uses that official contract and validates the event
-evidence and result again before anything reaches stdout.
+enforcement. Releases 1.1.9 and 1.1.10 added print-mode slash expansion and
+fixed headless model/effort selection. `agy-search` uses the structured contract,
+disables slash expansion so input stays data, and validates the event evidence
+and result again before anything reaches stdout.
 
 ## Install
 
@@ -26,6 +28,22 @@ agy-search --version
 agy-search status
 ```
 
+To update a release-installer copy later, rerun the same one-liner and verify
+both layers again:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/happycastle114/agy-search/releases/latest/download/agy-search-installer.sh \
+  | sh
+agy-search --version
+agy-search status
+```
+
+The installer replaces the CLI only after the selected release archive passes
+its SHA-256 check. No second updater executable is downloaded. Source or
+package-manager installations must continue updating through their original
+channel.
+
 For a source install instead:
 
 ```bash
@@ -34,13 +52,17 @@ cargo install --git https://github.com/happycastle114/agy-search --locked
 
 ## Requirements
 
-- An installed and signed-in Google Antigravity CLI 1.1.8 or newer
+- An installed and signed-in Google Antigravity CLI 1.1.10 or newer
 - Web tools available to the selected Antigravity model
 
 ```bash
 agy --version
 agy models
 ```
+
+Antigravity manages its own background updates during regular runs. `agy-search`
+never updates either executable implicitly; run update workflows only when that
+mutation is intentional.
 
 ## Commands
 
@@ -108,6 +130,10 @@ Apple Silicon development host. Linux x86-64 CI guards a 1.20 MiB binary-size
 budget. Real content latency is dominated by Antigravity web tools and model
 execution, not the Rust wrapper.
 
+The ARM64 macOS 0.2.2 CLI remains 868 KiB. The release installer deliberately
+does not add a second updater executable; rerunning it preserves the small
+installed footprint and the same checksum-verified archive path.
+
 Leave `--model` unset for the fastest normal path. Pinning a model intentionally
 runs fresh `agy models` discovery first so an invalid slug keeps its stable exit
 contract; use it when reproducibility matters, not by default. See
@@ -137,6 +163,7 @@ identifiers, or tool payloads.
 
 - Launches `agy` with direct argv, never a shell.
 - Uses plan mode, `stream-json`, and a generated JSON Schema.
+- Disables print-mode slash/skill expansion so request fields remain data.
 - Counts only completed built-in `search_web` or `read_url_content` steps.
 - Rejects generic MCP calls and merely started tools as provenance.
 - Runs content work in an exact `tempfile`-owned directory.
@@ -146,6 +173,11 @@ identifiers, or tool payloads.
 The CLI validates provenance structure, schemes, bounds, and citation
 membership. It cannot guarantee source truthfulness; independently verify
 high-stakes claims.
+
+`date` means an explicitly exposed publication or release date.
+`last_updated` means a separately exposed modification or update date. Missing
+metadata stays `null`; the CLI does not infer dates or copy one meaning into the
+other.
 
 ## Development
 

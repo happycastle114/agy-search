@@ -15,6 +15,8 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
   accepted explicit compatibility flag on every subcommand.
 - Add `-o PATH` to atomically write JSON and keep stdout empty.
 - Use query `-` to read up to 100 KiB from stdin for `search` and `research`.
+- Antigravity 1.1.10 or newer is required. The wrapper disables print-mode
+  slash/skill expansion so every request field remains data.
 
 ## Operations
 
@@ -58,6 +60,27 @@ explicit. They are bounded agent operations rather than exhaustive crawlers.
 - `research`: `object`, `title`, `summary`,
   `findings[{title,summary,citations[]}]`,
   `sources[{title,url,snippet,date,last_updated}]`
+
+For source metadata, `date` is an explicit publication/release date and
+`last_updated` is an explicit modification/update date. Either remains `null`
+when that distinct metadata is unavailable; one is never inferred from the
+other.
+
+## Updates
+
+Update shell-installer releases by rerunning the same installer:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/happycastle114/agy-search/releases/latest/download/agy-search-installer.sh \
+  | sh
+agy-search --version
+agy-search status
+```
+
+It verifies the selected application archive before replacement and installs no
+second updater executable. Source and package-manager installations update
+through their original channel. Never run an update implicitly during research.
 
 The CLI rejects empty content responses, non-HTTP(S) URLs, duplicate URLs,
 out-of-bound result counts, unsupported research citations, missing terminal

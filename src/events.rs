@@ -200,4 +200,25 @@ mod tests {
 
         assert!(parse_structured_run(stream, Operation::Search).is_err());
     }
+
+    #[test]
+    fn successful_terminal_event_without_structured_output_fails_closed() {
+        let stream = br#"{"event":"init"}
+{"event":"step_update","step_update":{"state":"DONE","step_type":"tool","tool_info":{"name":"search_web"}}}
+{"event":"result","result":{"status":"SUCCESS","response":"not the result"}}"#;
+
+        assert!(parse_structured_run(stream, Operation::Search).is_err());
+    }
+
+    #[test]
+    fn optional_runtime_metadata_and_intermediate_errors_do_not_replace_terminal_output() {
+        let stream = br#"{"event":"init","init":{"expanded_commands":[{"name":"plan","type":"system"}]}}
+{"event":"step_update","step_update":{"state":"DONE","step_type":"tool","tool_info":{"name":"search_web"}}}
+{"event":"step_update","step_update":{"state":"DONE","step_type":"error_message"}}
+{"event":"result","result":{"status":"SUCCESS","response":"invalid prose","structured_output":{"object":"search","results":[{"title":"Source","url":"https://example.com/","snippet":"Evidence"}]}}}"#;
+
+        let parsed = parse_structured_run(stream, Operation::Search);
+
+        assert!(matches!(parsed, Ok(ResponseDocument::Search(_))));
+    }
 }

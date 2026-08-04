@@ -37,11 +37,20 @@ def request() -> tuple[str, dict[str, object]]:
 
 
 def run_operation() -> int:
+    if sys.argv.count("--disable-slash-commands") != 1:
+        return 24
+    if sys.argv.index("--disable-slash-commands") > sys.argv.index("-p"):
+        return 24
     operation, payload = request()
     if operation == "search":
         query = str(payload["query"])
         url = "file:///private/source" if query == "invalid-source" else "https://example.com/source"
         source: dict[str, object] = {"title": "Source", "url": url, "snippet": query}
+        if query in {"explicit-date", "explicit-update"}:
+            source["date"] = "2026-08-03"
+            source["last_updated"] = (
+                "2026-08-04" if query == "explicit-update" else None
+            )
         if query == "extra-field":
             source["private"] = "must not escape"
         results = [source, source] if query == "duplicate-source" else [source]
@@ -87,15 +96,21 @@ def run_operation() -> int:
         findings = [] if payload.get("query") == "empty-findings" else [
             {"title": "Finding", "summary": "Detail", "citations": [source_url]}
         ]
+        source: dict[str, object] = {
+            "title": "Source",
+            "url": source_url,
+            "snippet": "Evidence",
+        }
+        if payload.get("query") == "explicit-date":
+            source["date"] = "2026-08-03"
+            source["last_updated"] = None
         emit(
             {
                 "object": "research",
                 "title": "Research",
                 "summary": "Synthesis",
                 "findings": findings,
-                "sources": [
-                    {"title": "Source", "url": source_url, "snippet": "Evidence"}
-                ],
+                "sources": [source],
             },
             "search_web",
         )

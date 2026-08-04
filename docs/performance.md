@@ -27,6 +27,11 @@ when changing process, parsing, schema, or output paths.
 | Fake one-process search, 30 runs | 22.87 ms | 23.22 ms | within noise |
 | Tavily CLI 0.1.4 fresh-process `--version` | 82.91 ms | n/a | reference only |
 
+The 0.2.2 hardening build remained 888,352 B and averaged 1.37 ms over 100
+fresh `--version` runs on 2026-08-04. The release installer adds no standalone
+updater binary, so the installed executable footprint remains 868 KiB. Updating
+reruns the same checksum-verified release installer.
+
 The local Tavily uv environment occupies 19 MiB. The comparison is limited to
 CLI startup and installation footprint; Tavily API latency and Antigravity
 model latency are different downstream systems and must not be compared as if

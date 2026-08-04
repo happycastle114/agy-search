@@ -73,8 +73,10 @@ fn real_stream_json_model_and_all_content_operations() -> Result<(), Box<dyn std
         let mut arguments = common.to_vec();
         arguments.extend(["--model", model.as_str(), "--effort", "low"]);
         arguments.extend_from_slice(operation_args);
+        let response = run(&arguments)
+            .map_err(|error| io::Error::other(format!("{expected} failed: {error}")))?;
         assert_eq!(
-            run(&arguments)?.get("object").and_then(Value::as_str),
+            response.get("object").and_then(Value::as_str),
             Some(expected)
         );
     }
