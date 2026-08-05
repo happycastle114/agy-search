@@ -31,6 +31,8 @@ jobs:
         run: |
           binary_version=$(./target/dist/agy-search --version)
           binary_bytes=$(stat -c %s ./target/dist/agy-search)
-          printf 'binary_version=%s\nbinary_bytes=%s\n' "$binary_version" "$binary_bytes"
+          binary_budget_bytes=1468007
+          printf 'binary_version=%s\nbinary_bytes=%s\nbinary_budget_bytes=%s\n' \
+            "$binary_version" "$binary_bytes" "$binary_budget_bytes"
           test "$binary_version" = "agy-search 0.2.4"
-          test "$binary_bytes" -lt 1258291
+          test "$binary_bytes" -lt "$binary_budget_bytes"

@@ -10,7 +10,7 @@ state.
 
 | Surface | Budget |
 |---|---:|
-| Distribution binary on Linux x86-64 CI | < 1.20 MiB |
+| Distribution binary on Linux x86-64 CI | < 1.40 MiB |
 | Local latency | No portable CI gate; report the measured guarded path below |
 | Captured stdout or stderr per Antigravity process | <= 16 MiB |
 
@@ -22,10 +22,30 @@ changing process, parsing, schema, or output paths.
 
 | Measurement | Result |
 |---|---:|
-| macOS ARM64 0.2.4 distribution binary | 1,072,032 B |
+| macOS ARM64 0.2.4 distribution binary | 1,072,064 B |
+| Linux x86-64 0.2.4 CI distribution binary | 1,395,344 B |
 | Historical pre-floor wrapper-only startup measurement | 2.0 ms mean |
 | Real `agy --version`, 10 runs | 41.0 ms mean, 38.9-44.2 ms range |
 | Fake content including `agy --version` guard, 10 runs | 47.1 ms mean, 46.1-50.1 ms range |
+
+### Release-size attribution
+
+The 0.2.3 release binaries measured 888,352 B on macOS ARM64 and 1,123,752 B
+on Linux x86-64. Version 0.2.4 is larger by 183,712 B (20.68%) and 271,592 B
+(24.17%), respectively. This is an explicitly accepted cost of the new bounded
+source fetching and DNS pinning, HTML source parsing, source/date verification,
+tool-policy enforcement, and request-constrained schemas rather than a
+dependency upgrade: the dependency and feature graphs are unchanged from
+0.2.3.
+
+A same-toolchain macOS `cargo bloat --release --crates` comparison attributed
+the 148.1 KiB `.text` increase primarily to `agy_search` (+93.4 KiB), Tokio
+(+33.8 KiB), and the standard library (+15.8 KiB). The current release profile
+remained the smallest safe measured configuration. Relative to its 1,072,064 B
+baseline, `opt-level=s` added 195,280 B, thin LTO added 567,712 B, 16 codegen
+units added 33,552 B, retaining symbols added 906,744 B, and unwind panics added
+199,200 B. The 1.40 MiB Linux gate therefore leaves 72,663 B (5.21%) above the
+observed 0.2.4 artifact while continuing to fail meaningful future growth.
 
 Every content command and `status` pays one uncached local `agy --version`
 preflight before model discovery or `-p`; this measurement is the full process

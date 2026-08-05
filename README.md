@@ -183,12 +183,14 @@ the needed fields, limiting context use without losing citation URLs.
 
 ## Performance
 
-The 0.2.4 Apple Silicon distribution binary is 1,072,032 B. On the measured
-host on 2026-08-06, real `agy --version` averaged 41.0 ms over 10 runs and a
-deterministic fake search including the required version guard averaged 47.1 ms
-over 10 runs. The guard is one local process before content, not a cache; its
-cost remains small next to real model/web-tool execution. Linux x86-64 CI guards
-a 1.20 MiB binary-size budget.
+The 0.2.4 distribution binaries measure 1,072,064 B on Apple Silicon and
+1,395,344 B on Linux x86-64. On the measured host on 2026-08-06, real
+`agy --version` averaged 41.0 ms over 10 runs and a deterministic fake search
+including the required version guard averaged 47.1 ms over 10 runs. The guard
+is one local process before content, not a cache; its cost remains small next to
+real model/web-tool execution. Linux x86-64 CI guards a 1.40 MiB binary-size
+budget. See [docs/performance.md](docs/performance.md) for the historical
+comparison and size attribution.
 
 The release installer deliberately does not add a second updater executable;
 rerunning it preserves the checksum-verified archive path.
