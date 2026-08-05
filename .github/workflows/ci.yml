@@ -29,5 +29,8 @@ jobs:
         run: cargo build --profile dist --locked
       - name: Smoke-test the standalone artifact
         run: |
-          test "$(./target/dist/agy-search --version)" = "agy-search 0.2.4"
-          test "$(stat -c %s ./target/dist/agy-search)" -lt 1258291
+          binary_version=$(./target/dist/agy-search --version)
+          binary_bytes=$(stat -c %s ./target/dist/agy-search)
+          printf 'binary_version=%s\nbinary_bytes=%s\n' "$binary_version" "$binary_bytes"
+          test "$binary_version" = "agy-search 0.2.4"
+          test "$binary_bytes" -lt 1258291
