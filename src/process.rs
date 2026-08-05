@@ -19,6 +19,24 @@ use crate::error::AgyError;
 
 const MAX_CAPTURE_BYTES: usize = 16 * 1024 * 1024;
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CaptureLimits {
+    stdout: usize,
+    stderr: usize,
+}
+
+impl CaptureLimits {
+    pub(crate) const fn new(stdout: usize, stderr: usize) -> Self {
+        Self { stdout, stderr }
+    }
+}
+
+impl Default for CaptureLimits {
+    fn default() -> Self {
+        Self::new(MAX_CAPTURE_BYTES, MAX_CAPTURE_BYTES)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ProcessRequest {
     pub(crate) argv: Vec<String>,
@@ -38,6 +56,13 @@ struct Capture {
 }
 
 pub(crate) async fn run(request: ProcessRequest) -> Result<ProcessOutput, AgyError> {
+    run_bounded(request, CaptureLimits::default()).await
+}
+
+pub(crate) async fn run_bounded(
+    request: ProcessRequest,
+    limits: CaptureLimits,
+) -> Result<ProcessOutput, AgyError> {
     let Some((program, arguments)) = request.argv.split_first() else {
         return Err(AgyError::InvalidCommand);
     };
@@ -54,8 +79,13 @@ pub(crate) async fn run(request: ProcessRequest) -> Result<ProcessOutput, AgyErr
     let mut child = command.spawn().map_err(|_| AgyError::Unavailable)?;
     let stdout = child.stdout.take().ok_or(AgyError::Unavailable)?;
     let stderr = child.stderr.take().ok_or(AgyError::Unavailable)?;
-    let execution =
-        async { tokio::try_join!(read_bounded(stdout), read_bounded(stderr), child.wait()) };
+    let execution = async {
+        tokio::try_join!(
+            read_bounded(stdout, limits.stdout),
+            read_bounded(stderr, limits.stderr),
+            child.wait()
+        )
+    };
 
     let completed = if let Ok(result) = time::timeout(request.timeout, execution).await {
         result.map_err(|_| AgyError::Unavailable)?
@@ -75,7 +105,7 @@ pub(crate) async fn run(request: ProcessRequest) -> Result<ProcessOutput, AgyErr
     })
 }
 
-async fn read_bounded<R>(mut reader: R) -> std::io::Result<Capture>
+async fn read_bounded<R>(mut reader: R, limit: usize) -> std::io::Result<Capture>
 where
     R: AsyncRead + Unpin,
 {
@@ -89,7 +119,7 @@ where
         if read == 0 {
             break;
         }
-        let keep = read.min(MAX_CAPTURE_BYTES.saturating_sub(capture.bytes.len()));
+        let keep = read.min(limit.saturating_sub(capture.bytes.len()));
         if let Some(bytes) = chunk.get(..keep) {
             capture.bytes.extend_from_slice(bytes);
         }
@@ -125,7 +155,7 @@ mod tests {
     #[tokio::test]
     async fn capture_is_bounded_while_the_reader_is_fully_drained() {
         let reader = tokio::io::repeat(42).take((MAX_CAPTURE_BYTES + 1) as u64);
-        let capture = read_bounded(reader).await;
+        let capture = read_bounded(reader, MAX_CAPTURE_BYTES).await;
 
         assert!(matches!(
             capture,

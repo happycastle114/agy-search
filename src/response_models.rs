@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{HttpUrl, NonEmptyText};
+use crate::types::{CalendarDate, HttpUrl, NonEmptyText};
 
 macro_rules! object_marker {
     ($name:ident, $variant:ident, $value:literal) => {
@@ -33,6 +33,31 @@ pub(crate) struct WebSource {
     pub(crate) date: Option<String>,
     #[serde(default)]
     pub(crate) last_updated: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScopeEvidence {
+    pub(crate) scope: NonEmptyText,
+    pub(crate) claim: NonEmptyText,
+    pub(crate) url: HttpUrl,
+    #[serde(default)]
+    pub(crate) date: Option<CalendarDate>,
+    #[serde(default)]
+    pub(crate) value: Option<NonEmptyText>,
+    #[serde(default)]
+    pub(crate) source_date_text: Option<NonEmptyText>,
+    #[serde(default)]
+    pub(crate) evidence_excerpt: Option<NonEmptyText>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EvidenceAudit {
+    #[schemars(length(min = 1, max = 20))]
+    pub(crate) candidates: Vec<ScopeEvidence>,
+    pub(crate) coverage_complete: bool,
+    pub(crate) conclusion: NonEmptyText,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -72,6 +97,8 @@ pub(crate) struct ResearchFinding {
 #[serde(deny_unknown_fields)]
 pub(crate) struct SearchResponse {
     pub(crate) object: SearchObject,
+    #[serde(skip_serializing)]
+    pub(crate) evidence_audit: EvidenceAudit,
     #[schemars(length(min = 1, max = 20))]
     pub(crate) results: Vec<WebSource>,
 }
@@ -106,6 +133,8 @@ pub(crate) struct CrawlResponse {
 #[serde(deny_unknown_fields)]
 pub(crate) struct ResearchResponse {
     pub(crate) object: ResearchObject,
+    #[serde(skip_serializing)]
+    pub(crate) evidence_audit: EvidenceAudit,
     pub(crate) title: NonEmptyText,
     pub(crate) summary: NonEmptyText,
     #[schemars(length(min = 1, max = 20))]

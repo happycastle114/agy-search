@@ -1,55 +1,73 @@
 # Performance
 
-`agy-search` keeps its own work small and treats Antigravity as a separate
-latency boundary. Measurements below were taken on the same Apple Silicon host
-on 2026-08-03 with Hyperfine 1.20.0, Antigravity 1.1.10, and Tavily CLI 0.1.4.
+`agy-search` keeps wrapper work small and treats Antigravity and its web tools
+as an external latency boundary. The local measurements below are from the
+Apple Silicon development host on 2026-08-06. They are observations, not service
+level objectives or a guarantee for another machine, account, model, or provider
+state.
 
 ## Budget
 
 | Surface | Budget |
 |---|---:|
 | Distribution binary on Linux x86-64 CI | < 1.20 MiB |
-| Rust CLI fresh-process startup on the measured host | < 5 ms |
-| Deterministic one-process search | < 30 ms |
+| Local latency | No portable CI gate; report the measured guarded path below |
 | Captured stdout or stderr per Antigravity process | <= 16 MiB |
 
 Shared CI runners are unsuitable for millisecond latency assertions, so CI
-enforces the artifact-size budget. The deterministic benchmark is run locally
-when changing process, parsing, schema, or output paths.
+enforces the artifact-size budget. Run the deterministic benchmark locally when
+changing process, parsing, schema, or output paths.
 
-## Measured results
+## Measured wrapper results
 
-| Measurement | Before | Optimized | Result |
-|---|---:|---:|---:|
-| macOS ARM64 distribution binary | 1,280,976 B | 888,352 B | -30.7% |
-| macOS ARM64 archive | 438,720 B | ~365.7 kB | -16.6% |
-| Fresh-process `--version`, 200 runs | 1.60 ms | 1.49 ms | no regression |
-| Fake one-process search, 30 runs | 22.87 ms | 23.22 ms | within noise |
-| Tavily CLI 0.1.4 fresh-process `--version` | 82.91 ms | n/a | reference only |
-
-The 0.2.2 hardening build remained 888,352 B and averaged 1.37 ms over 100
-fresh `--version` runs on 2026-08-04. The release installer adds no standalone
-updater binary, so the installed executable footprint remains 868 KiB. Updating
-reruns the same checksum-verified release installer.
-
-The local Tavily uv environment occupies 19 MiB. The comparison is limited to
-CLI startup and installation footprint; Tavily API latency and Antigravity
-model latency are different downstream systems and must not be compared as if
-they were wrapper overhead.
-
-Real discovery isolated the actual external bottleneck:
-
-| Command | Mean, 7 runs |
+| Measurement | Result |
 |---|---:|
-| `agy --version` | 40.8 ms |
-| `agy models` | 3.116 s |
-| `agy-search status` | 2.956 s |
+| macOS ARM64 0.2.4 distribution binary | 1,072,032 B |
+| Historical pre-floor wrapper-only startup measurement | 2.0 ms mean |
+| Real `agy --version`, 10 runs | 41.0 ms mean, 38.9-44.2 ms range |
+| Fake content including `agy --version` guard, 10 runs | 47.1 ms mean, 46.1-50.1 ms range |
 
-`status` remains fresh because it proves current authentication and model
-discovery. Caching that answer would make the command fast but untrustworthy.
-Likewise, `--model` performs a fresh discovery before content execution to keep
-unknown-model failures deterministic. Normal agent calls should omit it unless
-model reproducibility is required.
+Every content command and `status` pays one uncached local `agy --version`
+preflight before model discovery or `-p`; this measurement is the full process
+cost, not an inferred incremental estimate. It is cheap relative to the
+observed multi-second live model and web-tool work, but it is intentionally not
+hidden by a cache.
+
+The 2.0 ms result predates the 1.1.10 version-floor preflight and measures only
+the old wrapper path. It is retained as historical context, not a current
+guarded-content performance claim; do not compare it to the deterministic
+47.1 ms path.
+
+The release installer adds no standalone updater binary. It reruns the same
+checksum-verified release archive, so there is no separate updater footprint to
+measure.
+
+## Live observations
+
+These wall times include external model and web-tool work. They measure a
+particular live execution, not Rust wrapper overhead or a latency promise.
+
+| Scenario | Observed wall time | Outcome |
+|---|---:|---|
+| Quick standard search S1, median | 20.183 s | Returned validated JSON |
+| Quick standard search X1, median | 16.104 s | Returned validated JSON |
+| Final two-case official-source Quick median | 15.873 s | Explicit-date and legitimate-null-date oracles both passed |
+| Final X1 official-only Quick search | 17.26 s | Returned validated JSON |
+| T1 first-party synthesis | 34.77 s | Returned validated JSON |
+| Final C1 official-only synthesis with labeled inference | 61.24 s | Returned validated JSON |
+| Temporal v26 comparison | 40.51 s | Returned validated JSON |
+| Final one-scope exact-source temporal search | 29.05 s | Corrected to CLI 1.1.10 / 2026-08-03 from the verified source body |
+
+Provider variability is material. Earlier attempts in the same evidence series
+failed closed for model/effort mismatch, source-class violations, insufficiently
+labeled inference, or temporal evidence rejection; a failed attempt is not a
+successful latency sample. The checks establish evidence and safety behavior,
+not accuracy, availability, provider reliability, or latency guarantees.
+
+Accuracy and latency are separate measurements. A source-constrained or temporal
+request can take longer because it verifies declared sources and dates; a faster
+response is not more accurate. Conversely, a validated result proves only its
+declared evidence contract, not universal source truth.
 
 ## Reproduce
 
@@ -64,18 +82,15 @@ Measure startup and the deterministic Antigravity fixture:
 
 ```bash
 hyperfine --shell=none --warmup 20 --runs 200 \
-  'target/dist/agy-search --version' \
-  'tvly --version'
+  'target/dist/agy-search --version'
 
-hyperfine --warmup 5 --runs 30 \
-  'target/dist/agy-search --agy-path tests/fixtures/fake_agy.py search fixture -n 1 > /dev/null'
+hyperfine --shell=none --warmup 3 --runs 10 \
+  --command-name 'real agy --version' 'agy --version' \
+  --command-name 'fake content with version guard' \
+  'target/dist/agy-search --agy-path tests/fixtures/fake_agy.py search fixture -n 1'
 ```
 
-Measure discovery without spending content-generation usage:
-
-```bash
-hyperfine --warmup 1 --runs 7 \
-  'agy --version > /dev/null' \
-  'agy models > /dev/null' \
-  'agy-search status > /dev/null'
-```
+Run live commands only when an authenticated Antigravity account and the
+associated usage are in scope. Capture the command, model, effort, output, exit
+code, and wall time, then distinguish successful observations from fail-closed
+attempts before reporting any median or final timing.

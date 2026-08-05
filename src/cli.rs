@@ -4,7 +4,13 @@ use std::{path::PathBuf, str::FromStr};
 
 use clap::{Args, Parser, Subcommand};
 
-use crate::types::{Effort, HttpUrl, ModelSlug, NonEmptyText, TimeoutSeconds};
+use crate::{
+    source_restriction::SourceDomain,
+    temporal_contract::ScopeLabel,
+    types::{
+        CalendarDate, Effort, HttpUrl, ModelSlug, NonEmptyText, TimeoutSeconds, VerificationMode,
+    },
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -29,6 +35,9 @@ pub struct Cli {
     /// Antigravity reasoning effort.
     #[arg(long, default_value = "low", global = true)]
     pub(crate) effort: Option<Effort>,
+    /// Additional evidence requirements for time-ordered scope comparisons.
+    #[arg(long, default_value_t, global = true)]
+    pub(crate) verification: VerificationMode,
     /// End-to-end downstream deadline in seconds.
     #[arg(long, default_value = "120", global = true)]
     pub(crate) timeout: TimeoutSeconds,
@@ -72,11 +81,20 @@ pub(crate) struct SearchArgs {
     pub(crate) max_results: u16,
     /// Restrict discovery to a domain; repeat up to 20 times.
     #[arg(long = "domain")]
-    pub(crate) domains: Vec<NonEmptyText>,
+    pub(crate) domains: Vec<SourceDomain>,
     #[arg(long)]
     pub(crate) country: Option<NonEmptyText>,
     #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
     pub(crate) max_tokens_per_page: Option<u32>,
+    /// Exact caller-owned temporal scope; repeat 1 to 8 times. One requires --as-of.
+    #[arg(long = "scope")]
+    pub(crate) scopes: Vec<ScopeLabel>,
+    /// Canonical HTTPS evidence source; repeat for every permitted source.
+    #[arg(long = "source-url")]
+    pub(crate) source_urls: Vec<HttpUrl>,
+    /// Latest permitted source-published date for temporal evidence.
+    #[arg(long = "as-of")]
+    pub(crate) cutoff: Option<CalendarDate>,
     #[command(flatten)]
     pub(crate) output: OutputArgs,
 }
@@ -124,6 +142,18 @@ pub(crate) struct ResearchArgs {
     pub(crate) query: QueryArgument,
     #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u16).range(1..=20))]
     pub(crate) max_sources: u16,
+    /// Restrict sources to a domain tree; repeat up to 20 times.
+    #[arg(long = "domain")]
+    pub(crate) domains: Vec<SourceDomain>,
+    /// Exact caller-owned temporal scope; repeat 1 to 8 times. One requires --as-of.
+    #[arg(long = "scope")]
+    pub(crate) scopes: Vec<ScopeLabel>,
+    /// Canonical HTTPS evidence source; repeat for every permitted source.
+    #[arg(long = "source-url")]
+    pub(crate) source_urls: Vec<HttpUrl>,
+    /// Latest permitted source-published date for temporal evidence.
+    #[arg(long = "as-of")]
+    pub(crate) cutoff: Option<CalendarDate>,
     #[command(flatten)]
     pub(crate) output: OutputArgs,
 }

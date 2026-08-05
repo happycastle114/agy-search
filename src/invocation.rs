@@ -11,7 +11,12 @@ use crate::{
     request::{
         ContentRequest, CrawlRequest, ExtractRequest, MapRequest, ResearchRequest, SearchRequest,
     },
-    types::{Effort, ModelSlug, NonEmptyText, SourcePolicy, TimeoutSeconds},
+    source_restriction::SourceRestriction,
+    temporal_contract::TemporalContract,
+    types::{
+        DatePolicy, Effort, ModelSlug, NonEmptyText, ResearchAttemptBudget, ScopePolicy,
+        SourcePolicy, TimeoutSeconds, VerificationMode,
+    },
 };
 
 const STDIN_LIMIT_BYTES: u64 = 100 * 1024;
@@ -30,12 +35,13 @@ pub(crate) struct Invocation {
 pub(crate) enum InvocationCommand {
     Status,
     Models,
-    Content(ContentRequest),
+    Content(Box<ContentRequest>),
 }
 
 impl Cli {
     pub(crate) fn into_invocation(self) -> Result<Invocation, AgyError> {
-        let (command, output) = convert_command(self.command)?;
+        validate_model_effort(self.model.as_ref(), self.effort)?;
+        let (command, output) = convert_command(self.command, self.verification)?;
         Ok(Invocation {
             agy_path: resolve_executable(&self.agy_path)?,
             model: self.model,
@@ -47,24 +53,58 @@ impl Cli {
     }
 }
 
-fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBuf>), AgyError> {
+fn validate_model_effort(
+    model: Option<&ModelSlug>,
+    effort: Option<Effort>,
+) -> Result<(), AgyError> {
+    let Some(model_effort) = model.and_then(ModelSlug::effort_suffix) else {
+        return Ok(());
+    };
+    let Some(effort) = effort else {
+        return Ok(());
+    };
+    if model_effort == effort {
+        Ok(())
+    } else {
+        Err(AgyError::InvalidCommand)
+    }
+}
+
+fn convert_command(
+    command: Command,
+    verification: VerificationMode,
+) -> Result<(InvocationCommand, Option<PathBuf>), AgyError> {
     let converted = match command {
         Command::Status(output) => (InvocationCommand::Status, output.output),
         Command::Models(output) => (InvocationCommand::Models, output.output),
         Command::Search(arguments) => {
-            if arguments.domains.len() > 20 {
-                return Err(AgyError::InvalidCommand);
-            }
+            let source_urls = arguments.source_urls;
+            let source_restriction =
+                SourceRestriction::parse(arguments.domains, source_urls.clone())?;
+            let temporal_source_urls = match verification {
+                VerificationMode::Standard => Vec::new(),
+                VerificationMode::TemporalComparison => source_urls,
+            };
+            let temporal_contract = TemporalContract::parse(
+                verification,
+                arguments.scopes,
+                temporal_source_urls,
+                arguments.cutoff,
+            )?;
             let request = SearchRequest {
                 query: resolve_query(arguments.query)?,
                 source_policy: SourcePolicy::PrimaryFirst,
+                scope_policy: ScopePolicy::CompleteRequestedScope,
+                date_policy: DatePolicy::ExplicitSourceOnly,
+                verification,
+                temporal_contract,
+                source_restriction,
                 max_results: arguments.max_results,
-                domains: arguments.domains,
                 country: arguments.country,
                 max_tokens_per_page: arguments.max_tokens_per_page,
             };
             (
-                InvocationCommand::Content(ContentRequest::Search(request)),
+                InvocationCommand::Content(Box::new(ContentRequest::Search(request))),
                 arguments.output.output,
             )
         }
@@ -74,7 +114,7 @@ fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBu
                 query: arguments.query,
             };
             (
-                InvocationCommand::Content(ContentRequest::Extract(request)),
+                InvocationCommand::Content(Box::new(ContentRequest::Extract(request))),
                 arguments.output.output,
             )
         }
@@ -86,7 +126,7 @@ fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBu
                 allow_external: arguments.allow_external,
             };
             (
-                InvocationCommand::Content(ContentRequest::Map(request)),
+                InvocationCommand::Content(Box::new(ContentRequest::Map(request))),
                 arguments.output.output,
             )
         }
@@ -98,18 +138,37 @@ fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBu
                 allow_external: arguments.allow_external,
             };
             (
-                InvocationCommand::Content(ContentRequest::Crawl(request)),
+                InvocationCommand::Content(Box::new(ContentRequest::Crawl(request))),
                 arguments.output.output,
             )
         }
         Command::Research(arguments) => {
+            let source_urls = arguments.source_urls;
+            let source_restriction =
+                SourceRestriction::parse(arguments.domains, source_urls.clone())?;
+            let temporal_source_urls = match verification {
+                VerificationMode::Standard => Vec::new(),
+                VerificationMode::TemporalComparison => source_urls,
+            };
+            let temporal_contract = TemporalContract::parse(
+                verification,
+                arguments.scopes,
+                temporal_source_urls,
+                arguments.cutoff,
+            )?;
             let request = ResearchRequest {
                 query: resolve_query(arguments.query)?,
                 source_policy: SourcePolicy::PrimaryFirst,
+                scope_policy: ScopePolicy::CompleteRequestedScope,
+                date_policy: DatePolicy::ExplicitSourceOnly,
+                verification,
+                temporal_contract,
+                source_restriction,
                 max_sources: arguments.max_sources,
+                tool_call_budget: ResearchAttemptBudget::from_max_sources(arguments.max_sources),
             };
             (
-                InvocationCommand::Content(ContentRequest::Research(request)),
+                InvocationCommand::Content(Box::new(ContentRequest::Research(request))),
                 arguments.output.output,
             )
         }

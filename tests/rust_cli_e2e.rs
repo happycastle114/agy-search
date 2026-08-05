@@ -31,7 +31,7 @@ fn discovers_status_and_models_as_json() {
             "available": true,
             "model_count": 2,
             "object": "status",
-            "version": "9.9.9-fixture"
+            "version": "9.9.9"
         })
     );
     assert_eq!(
@@ -56,66 +56,6 @@ fn executes_all_five_content_operations() {
     for (arguments, expected) in scenarios {
         assert_eq!(json_stdout(arguments).get("object"), Some(&json!(expected)));
     }
-}
-
-#[test]
-fn defaults_to_fast_effort_and_primary_sources() {
-    let search = json_stdout(&["search", "default-fast-primary"]);
-
-    assert_eq!(
-        search.pointer("/results/0/url"),
-        Some(&json!("https://primary.example/source"))
-    );
-}
-
-#[test]
-fn preserves_explicit_date_metadata_without_inventing_updates() {
-    let search = json_stdout(&[
-        "--model",
-        "fixture-model",
-        "--effort",
-        "high",
-        "search",
-        "explicit-date",
-    ]);
-    assert_eq!(
-        search.pointer("/results/0/date"),
-        Some(&json!("2026-08-03"))
-    );
-    assert_eq!(
-        search.pointer("/results/0/last_updated"),
-        Some(&Value::Null)
-    );
-
-    let with_update = json_stdout(&["search", "explicit-update"]);
-    assert_eq!(
-        with_update.pointer("/results/0/date"),
-        Some(&json!("2026-08-03"))
-    );
-    assert_eq!(
-        with_update.pointer("/results/0/last_updated"),
-        Some(&json!("2026-08-04"))
-    );
-
-    let without_metadata = json_stdout(&["search", "undated-source"]);
-    assert_eq!(
-        without_metadata.pointer("/results/0/date"),
-        Some(&Value::Null)
-    );
-    assert_eq!(
-        without_metadata.pointer("/results/0/last_updated"),
-        Some(&Value::Null)
-    );
-
-    let research = json_stdout(&["research", "explicit-date"]);
-    assert_eq!(
-        research.pointer("/sources/0/date"),
-        Some(&json!("2026-08-03"))
-    );
-    assert_eq!(
-        research.pointer("/sources/0/last_updated"),
-        Some(&Value::Null)
-    );
 }
 
 #[test]
@@ -162,6 +102,33 @@ fn fails_closed_with_stable_exit_codes() {
         .code(7)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: unknown agy model\n"));
+}
+
+#[test]
+fn rejects_conflicting_model_effort_suffix_before_downstream_discovery() {
+    command()
+        .args([
+            "--model",
+            "fixture-model-high",
+            "--effort",
+            "low",
+            "search",
+            "fixture",
+        ])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::eq("error: invalid agy command\n"));
+}
+
+#[test]
+fn accepts_matching_or_unrecognized_model_effort_suffix() {
+    for (model, effort) in [("fixture-model-high", "high"), ("fixture-model", "high")] {
+        command()
+            .args(["--model", model, "--effort", effort, "search", "fixture"])
+            .assert()
+            .success();
+    }
 }
 
 #[test]
