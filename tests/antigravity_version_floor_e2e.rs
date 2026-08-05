@@ -167,13 +167,13 @@ fn all_preflight_and_content_work_share_the_original_deadline()
     let temporary = TempDir::new()?;
     let invocation_trace = trace(&temporary);
 
-    // When: model-pinned content is requested with one shared second of budget.
+    // When: model-pinned content is requested with one shared five-second budget.
     command(&invocation_trace)
-        .env("AGY_SEARCH_VERSION_DELAY", "0.7")
-        .env("AGY_SEARCH_MODELS_DELAY", "0.7")
+        .env("AGY_SEARCH_VERSION_DELAY", "1.5")
+        .env("AGY_SEARCH_MODELS_DELAY", "4")
         .args([
             "--timeout",
-            "1",
+            "5",
             "--model",
             "fixture-model",
             "search",
