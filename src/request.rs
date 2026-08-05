@@ -3,12 +3,13 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::types::{HttpUrl, NonEmptyText, Operation};
+use crate::types::{HttpUrl, NonEmptyText, Operation, SourcePolicy};
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SearchRequest {
     pub(crate) query: NonEmptyText,
+    pub(crate) source_policy: SourcePolicy,
     pub(crate) max_results: u16,
     pub(crate) domains: Vec<NonEmptyText>,
     pub(crate) country: Option<NonEmptyText>,
@@ -44,6 +45,7 @@ pub(crate) struct CrawlRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct ResearchRequest {
     pub(crate) query: NonEmptyText,
+    pub(crate) source_policy: SourcePolicy,
     pub(crate) max_sources: u16,
 }
 

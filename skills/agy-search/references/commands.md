@@ -11,12 +11,15 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
 
 - Set `AGY_SEARCH_AGY_PATH` instead of `--agy-path` when appropriate.
 - Discover `SLUG` with `agy-search models` in the current environment.
+- Content commands default to `--effort low`. Raise effort only for deliberate
+  deep synthesis; explicit effort always overrides the default.
 - Successful stdout is canonical JSON. Diagnostics use stderr. `--json` is an
   accepted explicit compatibility flag on every subcommand.
 - Add `-o PATH` to atomically write JSON and keep stdout empty.
 - Use query `-` to read up to 100 KiB from stdin for `search` and `research`.
 - Antigravity 1.1.10 or newer is required. The wrapper disables print-mode
-  slash/skill expansion so every request field remains data.
+  slash/skill expansion so every request field remains data. Search and
+  research send a typed `primary_first` source policy.
 
 ## Operations
 

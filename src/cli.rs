@@ -27,7 +27,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub(crate) model: Option<ModelSlug>,
     /// Antigravity reasoning effort.
-    #[arg(long, global = true)]
+    #[arg(long, default_value = "low", global = true)]
     pub(crate) effort: Option<Effort>,
     /// End-to-end downstream deadline in seconds.
     #[arg(long, default_value = "120", global = true)]

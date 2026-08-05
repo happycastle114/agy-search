@@ -11,7 +11,7 @@ use crate::{
     request::{
         ContentRequest, CrawlRequest, ExtractRequest, MapRequest, ResearchRequest, SearchRequest,
     },
-    types::{Effort, ModelSlug, NonEmptyText, TimeoutSeconds},
+    types::{Effort, ModelSlug, NonEmptyText, SourcePolicy, TimeoutSeconds},
 };
 
 const STDIN_LIMIT_BYTES: u64 = 100 * 1024;
@@ -57,6 +57,7 @@ fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBu
             }
             let request = SearchRequest {
                 query: resolve_query(arguments.query)?,
+                source_policy: SourcePolicy::PrimaryFirst,
                 max_results: arguments.max_results,
                 domains: arguments.domains,
                 country: arguments.country,
@@ -104,6 +105,7 @@ fn convert_command(command: Command) -> Result<(InvocationCommand, Option<PathBu
         Command::Research(arguments) => {
             let request = ResearchRequest {
                 query: resolve_query(arguments.query)?,
+                source_policy: SourcePolicy::PrimaryFirst,
                 max_sources: arguments.max_sources,
             };
             (

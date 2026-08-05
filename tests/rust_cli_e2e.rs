@@ -59,6 +59,16 @@ fn executes_all_five_content_operations() {
 }
 
 #[test]
+fn defaults_to_fast_effort_and_primary_sources() {
+    let search = json_stdout(&["search", "default-fast-primary"]);
+
+    assert_eq!(
+        search.pointer("/results/0/url"),
+        Some(&json!("https://primary.example/source"))
+    );
+}
+
+#[test]
 fn preserves_explicit_date_metadata_without_inventing_updates() {
     let search = json_stdout(&[
         "--model",

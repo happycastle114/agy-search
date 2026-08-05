@@ -95,7 +95,9 @@ agy-search --agy-path /absolute/path/to/agy status
 
 `--model` is checked against the current `agy models` output. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
-without adding its path to command history.
+without adding its path to command history. Content commands default to low
+reasoning effort for latency; pass `--effort medium` or `--effort high` only
+when the task needs deeper synthesis.
 
 | Command | Purpose | Important bounds |
 |---|---|---|
@@ -134,9 +136,11 @@ The ARM64 macOS 0.2.2 CLI remains 868 KiB. The release installer deliberately
 does not add a second updater executable; rerunning it preserves the small
 installed footprint and the same checksum-verified archive path.
 
-Leave `--model` unset for the fastest normal path. Pinning a model intentionally
-runs fresh `agy models` discovery first so an invalid slug keeps its stable exit
-contract; use it when reproducibility matters, not by default. See
+The fast normal path leaves `--model` unset and uses the default low effort.
+Pinning a model intentionally runs fresh `agy models` discovery first so an
+invalid slug keeps its stable exit contract; use it when reproducibility
+matters, not by default. Search also bounds live tool calls and tells
+Antigravity to emit structured output as soon as sufficient evidence exists. See
 [docs/performance.md](docs/performance.md) for the benchmark method and measured
 boundaries.
 
@@ -162,8 +166,11 @@ identifiers, or tool payloads.
 ## Trust model
 
 - Launches `agy` with direct argv, never a shell.
-- Uses plan mode, `stream-json`, and a generated JSON Schema.
+- Uses `stream-json` and a generated JSON Schema without forcing plan mode.
 - Disables print-mode slash/skill expansion so request fields remain data.
+- Defaults to low effort and limits ordinary search to two live search calls.
+- Sends a typed primary-first source policy and instructs Antigravity to avoid
+  unrelated tool detours.
 - Counts only completed built-in `search_web` or `read_url_content` steps.
 - Rejects generic MCP calls and merely started tools as provenance.
 - Runs content work in an exact `tempfile`-owned directory.

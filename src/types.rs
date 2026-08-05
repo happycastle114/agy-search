@@ -127,17 +127,10 @@ impl fmt::Display for Effort {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum RunMode {
-    Plan,
-}
-
-impl fmt::Display for RunMode {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Plan => "plan",
-        })
-    }
+#[derive(Clone, Copy, Debug, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SourcePolicy {
+    PrimaryFirst,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

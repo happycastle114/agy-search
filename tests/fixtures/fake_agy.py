@@ -3,7 +3,16 @@
 
 import json
 import sys
+from enum import Enum
 from urllib.parse import urljoin
+
+
+class SourcePolicy(str, Enum):
+    PRIMARY_FIRST = "primary_first"
+
+
+class Effort(str, Enum):
+    LOW = "low"
 
 
 def emit(structured_output: dict[str, object], tool: str) -> None:
@@ -44,7 +53,17 @@ def run_operation() -> int:
     operation, payload = request()
     if operation == "search":
         query = str(payload["query"])
-        url = "file:///private/source" if query == "invalid-source" else "https://example.com/source"
+        if query == "default-fast-primary":
+            effort_index = sys.argv.index("--effort") if "--effort" in sys.argv else None
+            if effort_index is None or sys.argv[effort_index + 1] != Effort.LOW.value:
+                return 25
+            url = (
+                "https://primary.example/source"
+                if payload.get("source_policy") == SourcePolicy.PRIMARY_FIRST.value
+                else "https://aggregator.example/summary"
+            )
+        else:
+            url = "file:///private/source" if query == "invalid-source" else "https://example.com/source"
         source: dict[str, object] = {"title": "Source", "url": url, "snippet": query}
         if query in {"explicit-date", "explicit-update"}:
             source["date"] = "2026-08-03"
