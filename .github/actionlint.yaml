@@ -1,0 +1,5 @@
+# cargo-dist 0.32.0 emits GitHub's current hosted Intel runner label. Keep it
+# explicit until actionlint's built-in label catalog includes the runner.
+self-hosted-runner:
+  labels:
+    - macos-15-intel
