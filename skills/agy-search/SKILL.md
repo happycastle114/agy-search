@@ -11,8 +11,8 @@ escalate only when the evidence is insufficient.
 ## Preflight
 
 Run only the cheap local checks once before the first research command in the
-current agent session. Do not launch downstream model discovery on the normal
-un-pinned search path:
+current agent session. Do not run a separate model-discovery command on the
+normal unpinned search path:
 
 ```bash
 command -v agy-search
@@ -35,8 +35,12 @@ Do not silently switch providers. After installation, repeat the cheap
 preflight. Run `agy-search status` only to diagnose availability or verify an
 install/update, not before each search. Run `agy-search models` once before
 explicitly pinning a model; omit `--model` on ordinary searches and never invent
-or cache a model slug. If the selected returned slug ends in `-low`, `-medium`,
-or `-high`, pass the matching `--effort` value. A mismatched suffix is invalid.
+or cache a model slug. On unpinned low-effort Standard Search, the CLI itself
+performs one bounded advisory catalog lookup and prefers exact
+`gemini-3.6-flash-low` only when currently advertised; it otherwise uses the
+provider default. Do not duplicate that lookup in the agent plan. If an
+explicitly selected returned slug ends in `-low`, `-medium`, or `-high`, pass the
+matching `--effort` value. A mismatched suffix is invalid.
 
 The supported Antigravity floor is 1.1.10. Verify `agy --version` once in this
 preflight; the core accepts only bare `X.Y.Z` output and rejects a bare semantic
@@ -314,18 +318,22 @@ artifacts until the answer is complete so provenance can be checked.
 ## Validate evidence
 
 - Require exit code 0 and the response `object` matching the command.
-- Cite only returned `http://` or `https://` URLs that directly support a claim.
-- The CLI resolves Google grounding transport links before output; never expose
-  or reconstruct one yourself. Each manual redirect hop is independently
-  parsed, DNS-validated, and pinned before it can be followed.
+- Cite only returned URLs that directly support a claim. Standard Search
+  exposes only terminal public HTTPS URLs.
+- The CLI validates direct URLs and resolves Google grounding transports before
+  Standard Search output; never expose or reconstruct a discarded URL. Each
+  redirect hop is independently parsed, DNS-validated, and pinned before it can
+  be followed.
 - For research, require every cited URL to appear in `sources`.
 - Interpret `date` only as an explicit publication/release date and
-  `last_updated` only as an explicit modification/update date. `date` is `null`
-  only when the source lacks an explicit publication/release date; never use an
-  execution, crawl, fetch, query, or cutoff date instead. Standard mode treats
-  both fields as best-effort source metadata. In `temporal-comparison`, the
-  verified audit binds publication dates only, so `last_updated` must be `null`;
-  any non-null update value fails closed with exit 6.
+  `last_updated` only as an explicit modification/update date. In Standard
+  Search, `date` is `null` when the source lacks an explicit date or the returned
+  same-URL evidence cannot bind its complete source date text. Never replace it
+  with an execution, crawl, fetch, query, cutoff, or inferred date. Standard
+  Research and malformed metadata remain fail-closed. In
+  `temporal-comparison`, the verified audit binds publication dates only, so
+  `last_updated` must be `null`; any non-null update value fails closed with exit
+  6.
 - For multi-scope latest/current/as-of claims, require the exact declared scopes,
   canonical source pages, exact version or value, and explicit source dates.
   Temporal exit 0 proves source-body binding for that declared set, not that the

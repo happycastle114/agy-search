@@ -11,8 +11,12 @@ fn fixture_agy() -> PathBuf {
 }
 
 fn command() -> Command {
+    let curl = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
-    command.arg("--agy-path").arg(fixture_agy());
+    command
+        .arg("--agy-path")
+        .arg(fixture_agy())
+        .env("AGY_SEARCH_CURL_PATH", curl);
     command
 }
 
@@ -71,7 +75,7 @@ fn restricted_search_rejects_contributor_and_mutated_site_queries() {
 }
 
 #[test]
-fn exact_source_url_is_an_output_allowlist_without_fetching()
+fn exact_source_url_is_an_output_allowlist_without_body_fetching()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: a standard Search exact URL restriction and a curl trace sentinel.
     let temporary = TempDir::new()?;
@@ -89,7 +93,7 @@ fn exact_source_url_is_an_output_allowlist_without_fetching()
         .assert()
         .success();
 
-    // Then: the public result succeeds without body verification or curl discovery.
+    // Then: the public result succeeds after terminal validation without fetching a body.
     let output: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
     assert_eq!(
         output.pointer("/results/0/url").and_then(Value::as_str),
@@ -260,7 +264,7 @@ fn invalid_or_duplicate_restrictions_exit_before_antigravity()
 }
 
 #[test]
-fn unrestricted_search_omits_policy_and_uses_one_process_without_curl()
+fn unrestricted_search_omits_policy_and_uses_one_process_without_body_fetching()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: traces for an ordinary no-flag Search.
     let temporary = TempDir::new()?;
@@ -275,7 +279,7 @@ fn unrestricted_search_omits_policy_and_uses_one_process_without_curl()
         .assert()
         .success();
 
-    // Then: exactly one content process ran, no curl ran, and no restriction was serialized.
+    // Then: one content process ran, no body fetch ran, and no restriction was serialized.
     let records = std::fs::read_to_string(agy_trace)?;
     let records = records.lines().collect::<Vec<_>>();
     assert_eq!(records.len(), 1);

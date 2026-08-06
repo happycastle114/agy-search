@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 #[derive(Clone, Debug, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(transparent)]
-pub(crate) struct NonEmptyText(String);
+pub(crate) struct NonEmptyText(#[schemars(length(min = 1))] String);
 
 impl NonEmptyText {
     pub(crate) fn parse(value: &str) -> Result<Self, &'static str> {

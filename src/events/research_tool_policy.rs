@@ -3,13 +3,20 @@
 use crate::types::{Operation, RequiredSearchQuery, ResearchToolPolicy, ScopedQueryKind};
 
 use super::{
-    generated_content_policy,
+    generated_content_policy::{self, ToolAttemptAssessment},
     sequence::{completed_research_tools, has_required_evidence},
     source_policy,
     stream::{
         Event, EventName, StepIndex, StepState, StepType, ToolInfo, ToolName, ToolParameters,
     },
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum EvidencePolicyAssessment {
+    Satisfied,
+    RecoverableUnlistedTool,
+    Rejected,
+}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct AttemptIdentity<'a> {
@@ -18,19 +25,20 @@ struct AttemptIdentity<'a> {
     parameters: Option<&'a ToolParameters>,
 }
 
-pub(super) fn evidence_satisfies_policy(
+pub(super) fn assess_evidence_policy(
     operation: Operation,
     policy: &ResearchToolPolicy,
     events: &[Event],
-) -> bool {
-    if !generated_content_policy::all_tool_attempts_are_safe(events) {
-        return false;
+) -> EvidencePolicyAssessment {
+    let tool_assessment = generated_content_policy::assess_tool_attempts(events);
+    if tool_assessment == ToolAttemptAssessment::Unsafe {
+        return EvidencePolicyAssessment::Rejected;
     }
     let Some(attempt_count) = completed_research_attempt_count(events) else {
-        return false;
+        return EvidencePolicyAssessment::Rejected;
     };
     let tools = completed_research_tools(events);
-    match policy {
+    let evidence_is_sufficient = match policy {
         ResearchToolPolicy::Budget(_) => {
             has_required_evidence(operation, &tools) && attempt_count <= policy.maximum()
         }
@@ -54,6 +62,13 @@ pub(super) fn evidence_satisfies_policy(
                 && scoped_search_attempts_are_valid(events, required_query)
                 && source_policy::attempts_satisfy_restriction(events, restriction)
         }
+    };
+    if !evidence_is_sufficient {
+        EvidencePolicyAssessment::Rejected
+    } else if tool_assessment == ToolAttemptAssessment::UnlistedTool {
+        EvidencePolicyAssessment::RecoverableUnlistedTool
+    } else {
+        EvidencePolicyAssessment::Satisfied
     }
 }
 
@@ -71,7 +86,7 @@ fn restricted_evidence_is_sufficient(
 
 /// Finds one successful direct-read pair after the caller has validated every attempt.
 ///
-/// `evidence_satisfies_policy` runs `all_tool_attempts_are_safe` and
+/// `assess_evidence_policy` runs the tool-attempt assessment and
 /// `completed_research_attempt_count` before this helper, so later failed,
 /// unbalanced, or foreign attempts cannot be hidden by this first valid pair.
 fn has_completed_paired_direct_read(events: &[Event]) -> bool {

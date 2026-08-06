@@ -5,18 +5,21 @@ use std::sync::Arc;
 use crate::{
     antigravity_version::Deadline,
     error::AgyError,
-    prompt::build_prompt,
+    prompt::{build_prompt, build_standard_search_retry_prompt},
     request::ContentRequest,
     response::Document as ResponseDocument,
     source_verification::VerifiedSources,
-    types::{Effort, ModelSlug},
+    types::{Effort, ModelSlug, Operation, ResearchToolPolicy},
     verification::{TemporalAssessment, TemporalRecoveryPlan, assess_search},
 };
 
 mod execution;
 mod temporal;
 
-use execution::{ExecutionContext, run_content_once};
+use execution::{
+    ContentExecution, ExecutionContext, StandardSearchRun, run_content_once,
+    run_standard_search_unvalidated_once,
+};
 use temporal::recover_temporal;
 
 #[cfg(test)]
@@ -51,7 +54,67 @@ pub(super) async fn execute(
     let request_json = request.to_json().map_err(|_| AgyError::InvalidCommand)?;
     let prompt = build_prompt(operation, request.verification(), &request_json);
     let response =
-        run_content_once(&context, operation, request.tool_policy(), schema, prompt).await?;
+        run_primary(&context, &request, operation, schema, prompt, &request_json).await?;
+    verify_response(context, request, response).await
+}
+
+async fn run_primary(
+    context: &ExecutionContext,
+    request: &ContentRequest,
+    operation: Operation,
+    schema: String,
+    prompt: String,
+    request_json: &str,
+) -> Result<ResponseDocument, AgyError> {
+    match request {
+        ContentRequest::Search(search) => match search.verification {
+            crate::types::VerificationMode::Standard => {
+                run_standard_search(
+                    context,
+                    operation,
+                    request.tool_policy(),
+                    schema,
+                    prompt,
+                    request_json,
+                )
+                .await
+            }
+            crate::types::VerificationMode::TemporalComparison => {
+                run_content_once(
+                    context,
+                    ContentExecution {
+                        operation,
+                        tool_policy: request.tool_policy(),
+                        schema,
+                        prompt,
+                    },
+                )
+                .await
+            }
+        },
+        ContentRequest::Extract(_)
+        | ContentRequest::Map(_)
+        | ContentRequest::Crawl(_)
+        | ContentRequest::Research(_) => {
+            run_content_once(
+                context,
+                ContentExecution {
+                    operation,
+                    tool_policy: request.tool_policy(),
+                    schema,
+                    prompt,
+                },
+            )
+            .await
+        }
+    }
+}
+
+async fn verify_response(
+    context: ExecutionContext,
+    request: ContentRequest,
+    response: ResponseDocument,
+) -> Result<ResponseDocument, AgyError> {
     match &request {
         ContentRequest::Search(search) => {
             let ResponseDocument::Search(result) = &response else {
@@ -120,4 +183,58 @@ pub(super) async fn execute(
             Ok(response)
         }
     }
+}
+
+async fn run_standard_search(
+    context: &ExecutionContext,
+    operation: Operation,
+    tool_policy: ResearchToolPolicy,
+    schema: String,
+    prompt: String,
+    request_json: &str,
+) -> Result<ResponseDocument, AgyError> {
+    let first = validate_standard_run(
+        run_standard_search_unvalidated_once(
+            context,
+            ContentExecution {
+                operation,
+                tool_policy: tool_policy.clone(),
+                schema: schema.clone(),
+                prompt,
+            },
+        )
+        .await?,
+    )?;
+    match first {
+        StandardSearchRun::Response(response) => Ok(response),
+        StandardSearchRun::NoReachableResults | StandardSearchRun::RecoverableUnlistedTool => {
+            let second = validate_standard_run(
+                run_standard_search_unvalidated_once(
+                    context,
+                    ContentExecution {
+                        operation,
+                        tool_policy,
+                        schema,
+                        prompt: build_standard_search_retry_prompt(request_json),
+                    },
+                )
+                .await?,
+            )?;
+            match second {
+                StandardSearchRun::Response(response) => Ok(response),
+                StandardSearchRun::NoReachableResults
+                | StandardSearchRun::RecoverableUnlistedTool => Err(AgyError::OutputInvalid),
+            }
+        }
+    }
+}
+
+fn validate_standard_run(mut run: StandardSearchRun) -> Result<StandardSearchRun, AgyError> {
+    if let StandardSearchRun::Response(response) = &mut run {
+        response
+            .validate_search_document()
+            .map_err(|_| AgyError::OutputInvalid)?;
+        response.project_unbound_standard_search_dates()?;
+    }
+    Ok(run)
 }

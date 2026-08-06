@@ -11,8 +11,12 @@ fn fixture_agy() -> PathBuf {
 }
 
 fn command() -> Command {
+    let curl = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
-    command.arg("--agy-path").arg(fixture_agy());
+    command
+        .arg("--agy-path")
+        .arg(fixture_agy())
+        .env("AGY_SEARCH_CURL_PATH", curl);
     command
 }
 
@@ -43,7 +47,7 @@ fn defaults_to_fast_effort_and_primary_sources() -> Result<(), Box<dyn std::erro
     // Then: the standard path returns primary evidence after exactly one content invocation.
     assert_eq!(
         search.pointer("/results/0/url"),
-        Some(&json!("https://primary.example/source"))
+        Some(&json!("https://example.com/primary-source"))
     );
     assert_eq!(invocations.len(), 1);
     assert_eq!(

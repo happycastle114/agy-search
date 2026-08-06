@@ -11,6 +11,9 @@ use serde_json::{Value, json};
 
 const FAKE_CURL: &str = include_str!("fixtures/fake_grounding_redirect_curl.py");
 
+#[path = "grounding_redirect_e2e/projection_cases.rs"]
+mod projection_cases;
+
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
@@ -123,19 +126,24 @@ fn resolves_large_final_content_length_with_header_only_requests()
 }
 
 #[test]
-fn rejects_nonzero_redirect_transport_as_invalid_output() -> Result<(), Box<dyn std::error::Error>>
-{
+fn retries_once_then_rejects_nonzero_redirect_transport_as_invalid_output()
+-> Result<(), Box<dyn std::error::Error>> {
     // Given: a resolver transport that exits with a curl-style transport failure status.
     let (_temporary, curl) = fake_curl()?;
     let trace = curl.with_extension("trace");
+    let invocation_trace = curl.with_extension("agy-trace");
 
-    // When/Then: transport failure cannot be reported as an Antigravity process failure.
+    // When: redirect transport fails after the first complete Antigravity run.
     command(&curl, &trace, "transport-failure")
+        .env("AGY_SEARCH_FIXTURE_TRACE", &invocation_trace)
         .args(["search", "grounding-redirect"])
         .assert()
         .code(6)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy output invalid\n"));
+
+    // Then: it stays a sanitized output error after exactly one fresh standard Search.
+    assert_eq!(fs::read_to_string(invocation_trace)?.lines().count(), 2);
     Ok(())
 }
 
@@ -172,8 +180,8 @@ fn rejects_unsafe_redirect_targets_before_a_second_request()
             .stdout(predicate::str::is_empty())
             .stderr(predicate::eq("error: agy output invalid\n"));
 
-        // Then: only the already-validated Google hop was requested.
-        assert_eq!(trace_records(&trace)?.len(), 1, "unsafe mode: {mode}");
+        // Then: each of the two bounded Search attempts stops at its validated Google hop.
+        assert_eq!(trace_records(&trace)?.len(), 2, "unsafe mode: {mode}");
     }
     Ok(())
 }

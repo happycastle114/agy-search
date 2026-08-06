@@ -1,4 +1,4 @@
-use std::{net::IpAddr, path::Path, time::Duration};
+use std::{net::IpAddr, path::PathBuf, time::Duration};
 
 use tokio::time::Instant;
 
@@ -12,17 +12,17 @@ use crate::{
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 const MAX_STDERR_BYTES: usize = 16 * 1024;
 
-#[derive(Clone, Copy, Debug)]
-pub(super) struct RedirectTransport<'a> {
-    executable: &'a str,
-    cwd: &'a Path,
+#[derive(Clone, Debug)]
+pub(super) struct RedirectTransport {
+    executable: String,
+    cwd: PathBuf,
     deadline: Instant,
 }
 
-impl<'a> RedirectTransport<'a> {
-    pub(super) const fn new(executable: &'a str, cwd: &'a Path, deadline: Instant) -> Self {
+impl RedirectTransport {
+    pub(super) fn new(executable: &str, cwd: PathBuf, deadline: Instant) -> Self {
         Self {
-            executable,
+            executable: executable.to_owned(),
             cwd,
             deadline,
         }
@@ -35,8 +35,8 @@ impl<'a> RedirectTransport<'a> {
         let timeout = remaining(self.deadline)?;
         let output = run_bounded(
             ProcessRequest {
-                argv: curl_argv(self.executable, &pinned, timeout),
-                cwd: self.cwd.to_path_buf(),
+                argv: curl_argv(&self.executable, &pinned, timeout),
+                cwd: self.cwd.clone(),
                 timeout,
             },
             CaptureLimits::new(MAX_HEADER_BYTES, MAX_STDERR_BYTES),

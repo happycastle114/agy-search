@@ -102,16 +102,29 @@ the benchmark did not invent one or substitute another model.
 An explicit model pays dynamic discovery before content: five local runs put
 `agy models` at 3.020 seconds mean, versus 45.8 milliseconds for `agy
 --version`. The 3.6 arm still had the lowest eligible end-to-end median. The
-remaining common post-model time includes fail-closed grounding redirect
-resolution that replaces Google transport URLs with direct source URLs; do not
+remaining common post-model time includes fail-closed Standard Search
+terminal-URL validation. It replaces Google transports, probes direct URLs, and
+removes dead or unsafe rows through the same DNS-pinned header-only path; do not
 remove that source-quality and SSRF boundary to improve a benchmark number.
 
-Keep ordinary calls unpinned so model catalog drift cannot break the default
-path. When a caller explicitly prioritizes current light-search latency, first
-run `agy-search models` and pin `gemini-3.6-flash-low` only if that exact slug is
-returned, with matching `--effort low`. Re-run this comparison before changing
-that recommendation because provider behavior and the runtime catalog can
-change independently of this wrapper.
+For ordinary low-effort standard Search, the wrapper now makes one advisory
+`agy models` query, bounded to five seconds inside the existing caller deadline,
+and adds `--model gemini-3.6-flash-low` only when that exact catalog entry is
+returned. If it is absent or advisory discovery fails while time remains, the
+content process omits `--model` and uses the provider default. Explicit pins
+remain strict and run fresh full-deadline discovery; temporal/research/site
+operations and medium/high Search skip the preference query. Re-run this
+comparison before changing the preference because provider behavior and the
+runtime catalog can change independently of this wrapper.
+
+The final 0.2.6 Korean-market regression then ran the exact broad query `한국 오늘
+증시` five times serially through that default path after direct-source terminal
+validation was enabled. All five commands exited 0. Wall times were 16.891,
+33.728, 16.853, 23.730, and 30.933 seconds, for a 23.730-second median versus the
+prior 26.990-second incident baseline. The nine returned URLs were non-Google
+terminal HTTPS responses returning HTTP 200 with no redirect, and every final
+date was exactly same-URL source-bound or `null`. This is a finite incident
+regression, not an availability or latency SLO.
 
 Provider variability is material. Earlier attempts in the same evidence series
 failed closed for model/effort mismatch, source-class violations, insufficiently

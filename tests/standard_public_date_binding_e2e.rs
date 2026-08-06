@@ -6,9 +6,14 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 fn command() -> Command {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root.join("tests/fixtures/fake_agy.py");
+    let curl = root.join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
-    command.arg("--agy-path").arg(fixture);
+    command
+        .arg("--agy-path")
+        .arg(fixture)
+        .env("AGY_SEARCH_CURL_PATH", curl);
     command
 }
 
@@ -36,10 +41,13 @@ fn public_source(operation: &str, query: &str) -> Value {
 }
 
 #[test]
-fn standard_search_rejects_an_invented_day_bound_to_month_only_source_text() {
+fn standard_search_downgrades_an_unbound_day_to_null() {
     // Given: a standard Search result whose public day is absent from its audit text.
-    // When/Then: the public CLI rejects the response with its stable output-invalid code.
-    assert_invalid("search", "standard-date-month-only");
+    // When: the otherwise valid response crosses the public CLI boundary.
+    let source = public_source("search", "standard-date-month-only");
+
+    // Then: the result survives without exposing an invented exact day.
+    assert_eq!(source.get("date"), Some(&Value::Null));
 }
 
 #[test]
@@ -115,6 +123,16 @@ fn standard_research_accepts_unambiguous_english_source_date_text() {
 
     // Then: the ISO public date is preserved.
     assert_eq!(source.get("date"), Some(&json!("1999-06-01")));
+}
+
+#[test]
+fn standard_search_accepts_unambiguous_korean_source_date_text() {
+    // Given: an ISO public date bound to an exact Korean full date in its audit.
+    // When: the standard Search response crosses the public CLI boundary.
+    let source = public_source("search", "standard-date-korean");
+
+    // Then: the ISO public date is preserved.
+    assert_eq!(source.get("date"), Some(&json!("2026-08-06")));
 }
 
 #[test]

@@ -56,8 +56,8 @@ cargo install --git https://github.com/happycastle114/agy-search --locked
 ## Requirements
 
 - An installed and signed-in Google Antigravity CLI 1.1.10 or newer
-- `curl`, used for bounded grounding-link normalization and opt-in temporal
-  source-body verification
+- `curl`, used for bounded Standard Search terminal-URL validation and opt-in
+  temporal source-body verification
 - Web tools available to the selected Antigravity model
 
 ```bash
@@ -68,8 +68,8 @@ agy-search --version
 agy --version
 ```
 
-Run `agy models` only to choose an explicit model pin; ordinary searches do not
-need model discovery.
+Run `agy models` yourself only to choose an explicit model pin. An unpinned
+low-effort Standard Search owns its single bounded advisory lookup internally.
 
 Before every content command, and before `status` claims availability,
 `agy-search` runs the cheap `agy --version` preflight. It accepts exactly the
@@ -126,9 +126,14 @@ agy-search --effort low --timeout 75 --verification temporal-comparison \
 agy-search --agy-path /absolute/path/to/agy status
 ```
 
-`--model` is checked against the current `agy models` output. A slug ending in
-`-low`, `-medium`, or `-high` must use the matching `--effort`; ordinary work
-omits `--model`. The
+`--model` is checked strictly against the current `agy models` output. A slug ending in
+`-low`, `-medium`, or `-high` must use the matching `--effort`. When `--model`
+is omitted for standard Search at low effort, `agy-search` makes one advisory
+catalog query, bounded to five seconds within the caller deadline, and selects
+`gemini-3.6-flash-low` only when that exact catalog entry is present. If it is
+absent or the advisory query fails while time remains, content omits `--model`
+and uses the provider default. Temporal Search, Research, Extract, Map, Crawl,
+and medium/high effort Search do not make that preference query. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
 non-default curl executable for the bounded source-link resolver and temporal
@@ -138,7 +143,8 @@ when the task needs deeper synthesis. For Search and Research, `--domain` is a
 caller-owned domain-tree allowlist (the named host plus its subdomains), while
 `--source-url` is a canonical exact-URL allowlist. In standard mode, either flag
 restricts returned/audited membership only and `--source-url` does not fetch a
-source body. Use `--verification temporal-comparison` as temporal source
+source body. Standard Search still performs a metadata-only terminal HTTPS
+reachability check. Use `--verification temporal-comparison` as temporal source
 verification across 1-8 exact caller-owned `--scope` values and 1-8 canonical
 HTTPS `--source-url` values. One scope verifies that exact latest tuple and
 requires `--as-of`; 2-8 scopes additionally select the unique newest member of
@@ -195,12 +201,13 @@ comparison and size attribution.
 The release installer deliberately does not add a second updater executable;
 rerunning it preserves the checksum-verified archive path.
 
-The fast normal path leaves `--model` unset, uses the short standard prompt, and
-keeps the default low effort. Temporal comparison adds canonical-page and
-complete-scope checks only when explicitly selected.
-Pinning a model intentionally runs fresh `agy models` discovery first so an
-invalid slug keeps its stable exit contract; use it when reproducibility
-matters, not by default. Search also bounds live tool calls and tells
+The fast normal path uses the short standard prompt and keeps the default low
+effort. It opportunistically pins the catalog-advertised fast Search model only
+when its bounded advisory discovery succeeds; otherwise it leaves `--model`
+unset for the provider default. Temporal comparison adds canonical-page and
+complete-scope checks only when explicitly selected. Pinning a model
+intentionally runs fresh `agy models` discovery first so an invalid slug keeps
+its stable exit contract; use it when reproducibility matters. Search also bounds live tool calls and tells
 Antigravity to emit structured output as soon as sufficient evidence exists. See
 [docs/performance.md](docs/performance.md) for the benchmark method and measured
 boundaries.
@@ -246,11 +253,13 @@ identifiers, or tool payloads.
   deadline. Standard mode never uses this fetch path.
 - Preserves exact search constraints and uses the second bounded tool call only
   to locate or read the canonical evidence page when verification needs it.
-- Resolves only Google grounding transport links through shell-free fixed curl
-  arguments: HTTPS-only protocols, five redirects, bounded connect/request time,
-  no response body, and a single validated direct target. Each manual redirect
-  hop is parsed, DNS-validated, and pinned before the next request; resolution
-  failures remain exit 6 rather than exposing transport URLs.
+- Validates every Standard Search result and audit URL through shell-free fixed
+  curl arguments: HTTPS-only protocols, five redirects, bounded
+  connect/request time, no response body, and one DNS-pinned terminal target.
+  Google search, transport, and cache origins are never public sources. A
+  failed or unsafe row is removed with its audit row; the existing single retry
+  is used only when no publishable result survives. Each redirect hop is parsed,
+  public-address validated, and pinned before the next request.
 - Counts every attempted built-in `search_web` or `read_url_content` lifecycle
   toward the budget and requires all started calls to complete successfully.
 - Rejects generic MCP calls and merely started tools as provenance.
@@ -276,12 +285,16 @@ and label its candidates unverified.
 
 `date` means an explicitly exposed publication or release date.
 `last_updated` means a separately exposed modification or update date. Missing
-publication/release dates stay `null`; the CLI never substitutes execution,
-crawl, fetch, query, or cutoff time, infers a date, or copies one meaning into
-the other. Temporal comparison instead requires strict ISO dates for every
-ordered candidate and rejects missing or null dates with exit 6. Its current
-source audit does not bind modification dates, so temporal public results must
-use `last_updated: null`; any non-null value also fails closed with exit 6.
+publication/release dates stay `null`. Standard Search also downgrades an exact
+date to `null` when the returned same-URL evidence does not bind its complete
+source date text; it preserves the source result instead of exposing unsupported
+metadata. Malformed dates still fail, and Standard Research remains strict. The
+CLI never substitutes execution, crawl, fetch, query, or cutoff time, infers a
+date, or copies one meaning into the other. Temporal comparison instead requires
+strict ISO dates for every ordered candidate and rejects missing or null dates
+with exit 6. Its current source audit does not bind modification dates, so
+temporal public results must use `last_updated: null`; any non-null value also
+fails closed with exit 6.
 
 ## Development
 

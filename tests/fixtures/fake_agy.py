@@ -6,6 +6,7 @@ import os
 import sys
 from urllib.parse import urljoin
 
+from fake_agy_agent import valid_agent_invocation
 from fake_agy_research import run_research
 from fake_agy_search import run_search
 
@@ -155,6 +156,8 @@ def trace_content_invocation(payload: dict[str, object]) -> None:
 
 
 def run_operation() -> int:
+    if not valid_agent_invocation(sys.argv[1:]):
+        return 24
     if sys.argv.count("--disable-slash-commands") != 1:
         return 24
     if sys.argv.index("--disable-slash-commands") > sys.argv.index("-p"):

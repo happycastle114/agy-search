@@ -17,10 +17,12 @@ fn fixture_agy() -> PathBuf {
 }
 
 fn command(trace: &Path) -> Command {
+    let curl = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
     command
         .arg("--agy-path")
         .arg(fixture_agy())
+        .env("AGY_SEARCH_CURL_PATH", curl)
         .env("AGY_SEARCH_VERSION_TRACE", trace);
     command
 }
@@ -73,8 +75,11 @@ fn accepts_minimum_and_later_official_versions_before_content()
             .success()
             .stdout(predicate::str::contains("\"object\": \"search\""));
 
-        // Then: the version probe precedes the sole content invocation.
-        assert_eq!(trace_lines(&invocation_trace)?, ["version", "content"]);
+        // Then: the floor probe precedes bounded advisory discovery and one content invocation.
+        assert_eq!(
+            trace_lines(&invocation_trace)?,
+            ["version", "models", "content"]
+        );
     }
     Ok(())
 }

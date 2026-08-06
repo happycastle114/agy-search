@@ -166,9 +166,18 @@ fn temporal_comparison_rejects_a_recovered_tuple_borrowed_from_a_sibling_panel()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy output invalid\n"));
 
-    // Then: all recovery calls ran, but no partial result escaped, and each
-    // caller-owned source was fetched exactly once for the shared contract.
-    assert_recovery_trace(&trace_scopes(&agy_trace)?);
+    // Then: the invalid beta recovery ran and no partial result escaped. Alpha
+    // may finish first or be cancelled by the intentional fail-fast boundary.
+    let scopes = trace_scopes(&agy_trace)?;
+    assert_eq!(scopes.first(), Some(&None));
+    let mut recovered = scopes.into_iter().skip(1).collect::<Vec<_>>();
+    recovered.sort();
+    let beta_only = vec![Some("beta".to_owned())];
+    let both_scopes = vec![Some("alpha".to_owned()), Some("beta".to_owned())];
+    assert!(recovered == beta_only || recovered == both_scopes);
+
+    // Every caller-owned source was still fetched exactly once before scoped
+    // recovery, so cancellation cannot weaken the shared source contract.
     let mut fetched = source_trace_urls(&source_trace)?;
     fetched.sort();
     assert_eq!(

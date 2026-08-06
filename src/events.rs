@@ -37,6 +37,27 @@ pub(crate) struct ParsedRun<State> {
     state: PhantomData<State>,
 }
 
+#[derive(Debug)]
+pub(crate) enum StructuredRunError {
+    Invalid(AgyError),
+    RecoverableUnlistedTool(Box<ResponseDocument>),
+}
+
+impl StructuredRunError {
+    pub(crate) fn into_public_error(self) -> AgyError {
+        match self {
+            Self::Invalid(error) => error,
+            Self::RecoverableUnlistedTool(_) => AgyError::OutputInvalid,
+        }
+    }
+}
+
+impl From<AgyError> for StructuredRunError {
+    fn from(error: AgyError) -> Self {
+        Self::Invalid(error)
+    }
+}
+
 impl ParsedRun<GroundingResolved> {
     pub(crate) fn into_response(self) -> ResponseDocument {
         self.response
@@ -57,14 +78,22 @@ pub(crate) fn parse_structured_run(
     output: &[u8],
     operation: Operation,
     policy: &ResearchToolPolicy,
-) -> Result<ParsedRun<PendingGrounding>, AgyError> {
+) -> Result<ParsedRun<PendingGrounding>, StructuredRunError> {
     let text = std::str::from_utf8(output).map_err(|_| AgyError::OutputInvalid)?;
     let events = stream::parse_events(text)?;
     sequence::validate(&events)?;
     let value = sequence::terminal_output(&events)?;
     let response = ResponseDocument::parse(operation, value)?;
-    if !research_tool_policy::evidence_satisfies_policy(operation, policy, &events) {
-        return Err(AgyError::OutputInvalid);
+    match research_tool_policy::assess_evidence_policy(operation, policy, &events) {
+        research_tool_policy::EvidencePolicyAssessment::Satisfied => {}
+        research_tool_policy::EvidencePolicyAssessment::RecoverableUnlistedTool => {
+            return Err(StructuredRunError::RecoverableUnlistedTool(Box::new(
+                response,
+            )));
+        }
+        research_tool_policy::EvidencePolicyAssessment::Rejected => {
+            return Err(AgyError::OutputInvalid.into());
+        }
     }
     Ok(ParsedRun {
         response,

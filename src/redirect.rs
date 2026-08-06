@@ -1,5 +1,6 @@
 //! Bounded normalization of Google grounding transport URLs.
 
+mod projection;
 mod response;
 mod transport;
 
@@ -15,14 +16,16 @@ use crate::{
     types::{NonEmptyText, SourceUrlKind},
 };
 
+pub(crate) use projection::{StandardSearchResolution, resolve_standard_search_run};
+
 const RESOLVER_ENVIRONMENT: &str = "AGY_SEARCH_CURL_PATH";
 const DEFAULT_RESOLVER: &str = "curl";
 const RESOLVER_TIMEOUT: Duration = Duration::from_secs(6);
 const MAX_REDIRECT_HOPS: usize = 5;
 
-#[derive(Clone, Copy, Debug)]
-struct RedirectResolver<'a> {
-    transport: RedirectTransport<'a>,
+#[derive(Clone, Debug)]
+pub(super) struct RedirectResolver {
+    transport: RedirectTransport,
 }
 
 pub(crate) async fn resolve_grounding_run(
@@ -46,10 +49,7 @@ pub(crate) async fn resolve_grounding_run(
     if transports.is_empty() {
         return Ok(run.mark_resolved());
     }
-    let executable = curl_executable()?;
-    let resolver = RedirectResolver {
-        transport: RedirectTransport::new(&executable, cwd, Instant::now() + RESOLVER_TIMEOUT),
-    };
+    let resolver = new_resolver(cwd)?;
     for transport in transports {
         let direct = resolver.resolve_one(&transport).await?;
         if let GroundingRequirement::Restricted {
@@ -66,6 +66,17 @@ pub(crate) async fn resolve_grounding_run(
     Ok(run.mark_resolved())
 }
 
+fn new_resolver(cwd: &Path) -> Result<RedirectResolver, AgyError> {
+    let executable = curl_executable()?;
+    Ok(RedirectResolver {
+        transport: RedirectTransport::new(
+            &executable,
+            cwd.to_path_buf(),
+            Instant::now() + RESOLVER_TIMEOUT,
+        ),
+    })
+}
+
 pub(crate) fn curl_executable() -> Result<String, AgyError> {
     match std::env::var(RESOLVER_ENVIRONMENT) {
         Ok(configured) => NonEmptyText::parse(&configured)
@@ -76,8 +87,8 @@ pub(crate) fn curl_executable() -> Result<String, AgyError> {
     }
 }
 
-impl RedirectResolver<'_> {
-    async fn resolve_one(
+impl RedirectResolver {
+    pub(super) async fn resolve_one(
         &self,
         transport: &crate::types::HttpUrl,
     ) -> Result<crate::types::HttpUrl, AgyError> {

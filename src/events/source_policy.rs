@@ -40,6 +40,7 @@ pub(super) fn attempts_satisfy_restriction(
                     .is_some_and(|url| match url.source_kind() {
                         SourceUrlKind::Direct => restriction.allows(&url),
                         SourceUrlKind::GroundingRedirect => true,
+                        SourceUrlKind::NonSource => false,
                     }),
                 ToolName::ViewFile | ToolName::GrepSearch => true,
                 ToolName::Other => false,
