@@ -27,4 +27,5 @@ pub(super) fn validate(response: &ResearchResponse) -> Result<(), AgyError> {
     }
     public_dates::validate_syntax(&response.sources)?;
     evidence_audit(&response.evidence_audit, sources.into_iter())
+        .map_err(|_| AgyError::OutputInvalid)
 }

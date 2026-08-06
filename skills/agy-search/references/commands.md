@@ -3,7 +3,8 @@
 ## Global contract
 
 Before the first content command in an agent session, use this cheap local
-preflight and do not discover models unless an explicit pin is requested:
+preflight and do not run a separate model command unless an explicit pin is
+requested:
 
 ```bash
 command -v agy-search
@@ -28,7 +29,10 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
   deep synthesis; explicit effort always overrides the default.
 - Ordinary work omits `--model`. For an explicit pin whose returned slug ends
   in `-low`, `-medium`, or `-high`, pass the matching `--effort`; a mismatch is
-  rejected before downstream execution.
+  rejected before downstream execution. Unpinned low-effort Standard Search
+  performs one internal five-second advisory catalog lookup and selects exact
+  `gemini-3.6-flash-low` only when advertised; otherwise it falls back to the
+  provider default. Other operations and effort levels skip that preference.
 - Verification defaults to `standard`. Use `temporal-comparison` for an exact
   latest/current tuple or ordered as-of-latest work across a caller-declared
   set. Search and research then require 1-8 unique `--scope` values and 1-8
@@ -126,12 +130,13 @@ viewed during search.
   `sources[{title,url,snippet,date,last_updated}]`
 
 For source metadata, `date` is an explicit publication/release date and
-`last_updated` is an explicit modification/update date. `date` is `null` only
-when the source lacks an explicit publication/release date; never infer it from
-`last_updated`, execution, crawl, fetch, query, or cutoff time. Standard mode
-treats both fields as best-effort source metadata. Temporal comparison verifies
-publication dates only, requires `last_updated: null`, and rejects a non-null
-update value with exit 6.
+`last_updated` is an explicit modification/update date. In Standard Search,
+`date` is `null` when the source lacks an explicit publication/release date or
+the returned same-URL evidence cannot bind its complete source date text. Never
+infer it from `last_updated`, execution, crawl, fetch, query, or cutoff time.
+Malformed metadata and Standard Research remain fail-closed. Temporal comparison
+verifies publication dates only, requires `last_updated: null`, and rejects a
+non-null update value with exit 6.
 
 Search and research schemas also require an internal evidence audit with at
 least one candidate and one candidate per requested scope. The wrapper validates

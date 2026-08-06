@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, future::Future, sync::Arc};
 
 use tokio::task::JoinSet;
 
-use super::{ExecutionContext, run_content_once};
+use super::{ContentExecution, ExecutionContext, run_content_once};
 use crate::{
     error::AgyError,
     prompt::build_scope_prompt,
@@ -57,20 +57,24 @@ pub(super) async fn recover_temporal(
             let prompt = build_scope_prompt(&request_json);
             let response = run_content_once(
                 &context,
-                Operation::Search,
-                match &request.source_restriction {
-                    SourceRestriction::Unrestricted => ResearchToolPolicy::ScopedTemporalSearch(
-                        request.required_search_query.clone(),
-                    ),
-                    restriction @ SourceRestriction::Allowlist { .. } => {
-                        ResearchToolPolicy::RestrictedScopedTemporalSearch {
-                            required_query: request.required_search_query.clone(),
-                            restriction: Box::new(restriction.clone()),
+                ContentExecution {
+                    operation: Operation::Search,
+                    tool_policy: match &request.source_restriction {
+                        SourceRestriction::Unrestricted => {
+                            ResearchToolPolicy::ScopedTemporalSearch(
+                                request.required_search_query.clone(),
+                            )
                         }
-                    }
+                        restriction @ SourceRestriction::Allowlist { .. } => {
+                            ResearchToolPolicy::RestrictedScopedTemporalSearch {
+                                required_query: request.required_search_query.clone(),
+                                restriction: Box::new(restriction.clone()),
+                            }
+                        }
+                    },
+                    schema,
+                    prompt,
                 },
-                schema,
-                prompt,
             )
             .await?;
             let ResponseDocument::Search(result) = &response else {

@@ -8,12 +8,16 @@ use url::Url;
 
 #[derive(Clone, Debug, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(transparent)]
-pub(crate) struct HttpUrl(String);
+pub(crate) struct HttpUrl(
+    #[schemars(regex(pattern = r"^https?://[^\s]+$"))]
+    String,
+);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SourceUrlKind {
     Direct,
     GroundingRedirect,
+    NonSource,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,17 +68,64 @@ impl HttpUrl {
     }
 
     pub(crate) fn source_kind(&self) -> SourceUrlKind {
-        const GROUNDING_HOST: &str = "vertexaisearch.cloud.google.com";
-        const GROUNDING_PATH_PREFIX: &str = "/grounding-api-redirect/";
+        Url::parse(self.as_str()).map_or(SourceUrlKind::Direct, |parsed| {
+            KnownGoogleHost::parse(parsed.host_str()).source_kind(parsed.path())
+        })
+    }
+}
 
-        match Url::parse(self.as_str()) {
-            Ok(parsed)
-                if parsed.host_str() == Some(GROUNDING_HOST)
-                    && parsed.path().starts_with(GROUNDING_PATH_PREFIX) =>
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KnownGoogleHost {
+    VertexAiSearch,
+    GoogleSearch,
+    GoogleNews,
+    Other,
+}
+
+impl KnownGoogleHost {
+    fn parse(host: Option<&str>) -> Self {
+        const VERTEX_AI_SEARCH: &str = "vertexaisearch.cloud.google.com";
+        const GOOGLE_SEARCH: [&str; 2] = ["google.com", "www.google.com"];
+        const GOOGLE_NEWS: &str = "news.google.com";
+
+        let Some(host) = host.map(|value| value.trim_end_matches('.')) else {
+            return Self::Other;
+        };
+        if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
+            Self::VertexAiSearch
+        } else if GOOGLE_SEARCH
+            .iter()
+            .any(|candidate| host.eq_ignore_ascii_case(candidate))
+        {
+            Self::GoogleSearch
+        } else if host.eq_ignore_ascii_case(GOOGLE_NEWS) {
+            Self::GoogleNews
+        } else {
+            Self::Other
+        }
+    }
+
+    fn source_kind(self, path: &str) -> SourceUrlKind {
+        const GROUNDING_PATH: &str = "/grounding-api-redirect/";
+        const GOOGLE_REDIRECT_PATH: &str = "/url";
+        const GOOGLE_NEWS_REDIRECT_PATHS: [&str; 3] = ["/articles/", "/read/", "/rss/articles/"];
+
+        match self {
+            Self::VertexAiSearch if path.starts_with(GROUNDING_PATH) => {
+                SourceUrlKind::GroundingRedirect
+            }
+            Self::GoogleSearch if path == GOOGLE_REDIRECT_PATH => SourceUrlKind::GroundingRedirect,
+            Self::GoogleNews
+                if GOOGLE_NEWS_REDIRECT_PATHS
+                    .iter()
+                    .any(|prefix| path.starts_with(prefix)) =>
             {
                 SourceUrlKind::GroundingRedirect
             }
-            Ok(_) | Err(_) => SourceUrlKind::Direct,
+            Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews => {
+                SourceUrlKind::NonSource
+            }
+            Self::Other => SourceUrlKind::Direct,
         }
     }
 }
@@ -101,6 +152,20 @@ impl<'de> Deserialize<'de> for HttpUrl {
 mod tests {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn known_google_transport_and_wrapper_urls_are_never_direct() {
+        for value in [
+            "https://vertexaisearch.cloud.google.com./grounding-api-redirect/token",
+            "https://vertexaisearch.cloud.google.com/another-transport-path",
+            "https://www.google.com/url?q=https%3A%2F%2Fexample.com",
+            "https://google.com/url?url=https%3A%2F%2Fexample.com",
+            "https://news.google.com/articles/example",
+        ] {
+            let url = HttpUrl::parse(value).expect("Google transport URL must parse");
+            assert_ne!(url.source_kind(), SourceUrlKind::Direct, "URL: {value}");
+        }
+    }
 
     proptest! {
         #[test]

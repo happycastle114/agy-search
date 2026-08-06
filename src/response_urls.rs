@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 
 use crate::{
+    error::AgyError,
     response_models::ResponseDocument,
     types::{HttpUrl, SourceUrlKind},
 };
@@ -92,6 +93,46 @@ impl ResponseDocument {
                     .for_each(|item| replace(&mut item.url));
             }
             Self::Status(_) | Self::Models(_) => {}
+        }
+    }
+
+    pub(crate) fn non_source_search_urls(&self) -> Result<Vec<HttpUrl>, AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        let mut seen = HashSet::new();
+        Ok(value
+            .results
+            .iter()
+            .map(|item| &item.url)
+            .chain(value.evidence_audit.candidates.iter().map(|item| &item.url))
+            .filter(|url| url.source_kind() == SourceUrlKind::NonSource)
+            .filter(|url| seen.insert((*url).clone()))
+            .cloned()
+            .collect())
+    }
+
+    pub(crate) fn remove_search_url(&mut self, removed: &HttpUrl) -> Result<(), AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        value.results.retain(|item| &item.url != removed);
+        value
+            .evidence_audit
+            .candidates
+            .retain(|item| &item.url != removed);
+        Ok(())
+    }
+
+    pub(crate) const fn search_results_empty(&self) -> Result<bool, AgyError> {
+        match self {
+            Self::Search(value) => Ok(value.results.is_empty()),
+            Self::Extract(_)
+            | Self::Map(_)
+            | Self::Crawl(_)
+            | Self::Research(_)
+            | Self::Status(_)
+            | Self::Models(_) => Err(AgyError::OutputInvalid),
         }
     }
 }

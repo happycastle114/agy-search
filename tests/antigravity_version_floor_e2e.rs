@@ -73,8 +73,11 @@ fn accepts_minimum_and_later_official_versions_before_content()
             .success()
             .stdout(predicate::str::contains("\"object\": \"search\""));
 
-        // Then: the version probe precedes the sole content invocation.
-        assert_eq!(trace_lines(&invocation_trace)?, ["version", "content"]);
+        // Then: the floor probe precedes bounded advisory discovery and one content invocation.
+        assert_eq!(
+            trace_lines(&invocation_trace)?,
+            ["version", "models", "content"]
+        );
     }
     Ok(())
 }

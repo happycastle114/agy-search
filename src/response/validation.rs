@@ -12,9 +12,15 @@ use crate::{
 };
 
 use super::{
-    collection_validation::{bounded, evidence_audit, unique},
+    collection_validation::{EvidenceAuditError, bounded, evidence_audit, unique},
     public_dates, research_validation,
 };
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SearchDocumentError {
+    AuditCoverageMissing,
+    Invalid,
+}
 
 pub(super) fn request(
     response: &ResponseDocument,
@@ -140,12 +146,7 @@ fn validate_research_request(
 pub(super) fn document(response: &ResponseDocument) -> Result<(), AgyError> {
     match response {
         ResponseDocument::Search(value) => {
-            validate_urls(&value.results, 20, |item| &item.url)?;
-            public_dates::validate_syntax(&value.results)?;
-            evidence_audit(
-                &value.evidence_audit,
-                value.results.iter().map(|item| &item.url),
-            )
+            search_document(value).map_err(|_| AgyError::OutputInvalid)
         }
         ResponseDocument::Extract(value) => validate_urls(&value.results, 20, |item| &item.url),
         ResponseDocument::Map(value) => validate_urls(&value.results, 100, |item| &item.url),
@@ -153,6 +154,22 @@ pub(super) fn document(response: &ResponseDocument) -> Result<(), AgyError> {
         ResponseDocument::Research(value) => research_validation::validate(value),
         ResponseDocument::Status(_) | ResponseDocument::Models(_) => Ok(()),
     }
+}
+
+pub(crate) fn search_document(
+    response: &crate::response_models::SearchResponse,
+) -> Result<(), SearchDocumentError> {
+    validate_urls(&response.results, 20, |item| &item.url)
+        .map_err(|_| SearchDocumentError::Invalid)?;
+    public_dates::validate_syntax(&response.results).map_err(|_| SearchDocumentError::Invalid)?;
+    evidence_audit(
+        &response.evidence_audit,
+        response.results.iter().map(|item| &item.url),
+    )
+    .map_err(|error| match error {
+        EvidenceAuditError::CandidateInvalid => SearchDocumentError::Invalid,
+        EvidenceAuditError::PublicUrlMissing => SearchDocumentError::AuditCoverageMissing,
+    })
 }
 
 fn validate_source_restriction<'a>(

@@ -54,6 +54,42 @@ if mode == "success":
     else:
         location = None
         status = 200
+elif mode == "google-wrapper":
+    if host in {"google.com", "www.google.com"}:
+        location, status = "https://example.com/canonical", 302
+    else:
+        location, status = None, 200
+elif mode == "trailing-dot":
+    if initial:
+        location, status = "https://example.com/canonical", 302
+    else:
+        location, status = None, 200
+elif mode == "same-transport-origin":
+    if initial:
+        location, status = (
+            "https://vertexaisearch.cloud.google.com/another-transport-path",
+            302,
+        )
+    else:
+        location, status = None, 200
+elif mode in {"two-origins", "two-origins-one-dead", "retry-projection"}:
+    if initial:
+        token = urlparse(url).path.rsplit("/", maxsplit=1)[-1]
+        if token == "primary":
+            location = "https://example.com/primary"
+        elif token == "secondary":
+            location = "https://iana.org/secondary"
+        else:
+            location = f"https://example.com/{token}"
+        status = 302
+    elif mode in {"two-origins-one-dead", "retry-projection"} and (
+        host == "iana.org" or urlparse(url).path.startswith("/dead-")
+    ):
+        location = None
+        status = 404
+    else:
+        location = None
+        status = 200
 elif mode == "private-v4":
     location, status = "https://127.0.0.1/secret", 302
 elif mode == "private-v6":

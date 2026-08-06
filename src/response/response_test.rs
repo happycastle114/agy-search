@@ -26,6 +26,62 @@ fn search_schema_requires_internal_evidence_audit() {
 }
 
 #[test]
+fn search_schema_rejects_empty_evidence_text_before_deserialization() {
+    // Given: the schema used by a standard Search model call.
+    let schema = ResponseDocument::schema(
+        Operation::Search,
+        VerificationMode::Standard,
+        None,
+        &SourceRestriction::Unrestricted,
+    )
+    .expect("standard Search schema must render");
+    let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
+
+    // When: optional source-text fields are inspected at the model boundary.
+    let minimum = document
+        .pointer("/$defs/NonEmptyText/minLength")
+        .and_then(Value::as_u64);
+    let references = ["source_date_text", "evidence_excerpt", "value"].map(|field| {
+        document
+            .pointer(&format!(
+                "/$defs/ScopeEvidence/properties/{field}/anyOf/0/$ref"
+            ))
+            .and_then(Value::as_str)
+    });
+
+    // Then: empty strings are ruled out before the typed parser sees them.
+    assert_eq!(minimum, Some(1));
+    assert_eq!(references, [Some("#/$defs/NonEmptyText"); 3]);
+}
+
+#[test]
+fn search_schema_requires_http_source_urls_before_deserialization() {
+    // Given: the schema used by a standard Search model call.
+    let schema = ResponseDocument::schema(
+        Operation::Search,
+        VerificationMode::Standard,
+        None,
+        &SourceRestriction::Unrestricted,
+    )
+    .expect("standard Search schema must render");
+    let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
+
+    // When: public and audit URL fields are inspected at the model boundary.
+    let pattern = document
+        .pointer("/$defs/HttpUrl/pattern")
+        .and_then(Value::as_str);
+    let references = ["WebSource", "ScopeEvidence"].map(|definition| {
+        document
+            .pointer(&format!("/$defs/{definition}/properties/url/$ref"))
+            .and_then(Value::as_str)
+    });
+
+    // Then: empty or non-HTTP source strings cannot satisfy the generated schema.
+    assert_eq!(pattern, Some(r"^https?://[^\s]+$"));
+    assert_eq!(references, [Some("#/$defs/HttpUrl"); 2]);
+}
+
+#[test]
 fn restricted_search_schema_accepts_a_canonical_domain_policy() {
     let restriction = SourceRestriction::parse(
         vec![SourceDomain::from_str("rust-lang.org").expect("valid test domain")],

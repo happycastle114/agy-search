@@ -71,4 +71,31 @@ impl ResponseDocument {
     pub(crate) fn validate(&self) -> Result<(), AgyError> {
         validation::document(self)
     }
+
+    pub(crate) fn validate_search_document(&self) -> Result<(), validation::SearchDocumentError> {
+        match self {
+            Self::Search(response) => validation::search_document(response),
+            Self::Extract(_)
+            | Self::Map(_)
+            | Self::Crawl(_)
+            | Self::Research(_)
+            | Self::Status(_)
+            | Self::Models(_) => Err(validation::SearchDocumentError::Invalid),
+        }
+    }
+
+    pub(crate) fn project_unbound_standard_search_dates(&mut self) -> Result<(), AgyError> {
+        match self {
+            Self::Search(response) => public_dates::project_unbound_standard_dates(
+                &mut response.results,
+                &response.evidence_audit,
+            ),
+            Self::Extract(_)
+            | Self::Map(_)
+            | Self::Crawl(_)
+            | Self::Research(_)
+            | Self::Status(_)
+            | Self::Models(_) => Err(AgyError::OutputInvalid),
+        }
+    }
 }

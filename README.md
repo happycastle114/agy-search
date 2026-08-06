@@ -126,9 +126,14 @@ agy-search --effort low --timeout 75 --verification temporal-comparison \
 agy-search --agy-path /absolute/path/to/agy status
 ```
 
-`--model` is checked against the current `agy models` output. A slug ending in
-`-low`, `-medium`, or `-high` must use the matching `--effort`; ordinary work
-omits `--model`. The
+`--model` is checked strictly against the current `agy models` output. A slug ending in
+`-low`, `-medium`, or `-high` must use the matching `--effort`. When `--model`
+is omitted for standard Search at low effort, `agy-search` makes one advisory
+catalog query, bounded to five seconds within the caller deadline, and selects
+`gemini-3.6-flash-low` only when that exact catalog entry is present. If it is
+absent or the advisory query fails while time remains, content omits `--model`
+and uses the provider default. Temporal Search, Research, Extract, Map, Crawl,
+and medium/high effort Search do not make that preference query. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
 non-default curl executable for the bounded source-link resolver and temporal
@@ -195,12 +200,13 @@ comparison and size attribution.
 The release installer deliberately does not add a second updater executable;
 rerunning it preserves the checksum-verified archive path.
 
-The fast normal path leaves `--model` unset, uses the short standard prompt, and
-keeps the default low effort. Temporal comparison adds canonical-page and
-complete-scope checks only when explicitly selected.
-Pinning a model intentionally runs fresh `agy models` discovery first so an
-invalid slug keeps its stable exit contract; use it when reproducibility
-matters, not by default. Search also bounds live tool calls and tells
+The fast normal path uses the short standard prompt and keeps the default low
+effort. It opportunistically pins the catalog-advertised fast Search model only
+when its bounded advisory discovery succeeds; otherwise it leaves `--model`
+unset for the provider default. Temporal comparison adds canonical-page and
+complete-scope checks only when explicitly selected. Pinning a model
+intentionally runs fresh `agy models` discovery first so an invalid slug keeps
+its stable exit contract; use it when reproducibility matters. Search also bounds live tool calls and tells
 Antigravity to emit structured output as soon as sufficient evidence exists. See
 [docs/performance.md](docs/performance.md) for the benchmark method and measured
 boundaries.
@@ -276,12 +282,16 @@ and label its candidates unverified.
 
 `date` means an explicitly exposed publication or release date.
 `last_updated` means a separately exposed modification or update date. Missing
-publication/release dates stay `null`; the CLI never substitutes execution,
-crawl, fetch, query, or cutoff time, infers a date, or copies one meaning into
-the other. Temporal comparison instead requires strict ISO dates for every
-ordered candidate and rejects missing or null dates with exit 6. Its current
-source audit does not bind modification dates, so temporal public results must
-use `last_updated: null`; any non-null value also fails closed with exit 6.
+publication/release dates stay `null`. Standard Search also downgrades an exact
+date to `null` when the returned same-URL evidence does not bind its complete
+source date text; it preserves the source result instead of exposing unsupported
+metadata. Malformed dates still fail, and Standard Research remains strict. The
+CLI never substitutes execution, crawl, fetch, query, or cutoff time, infers a
+date, or copies one meaning into the other. Temporal comparison instead requires
+strict ISO dates for every ordered candidate and rejects missing or null dates
+with exit 6. Its current source audit does not bind modification dates, so
+temporal public results must use `last_updated: null`; any non-null value also
+fails closed with exit 6.
 
 ## Development
 

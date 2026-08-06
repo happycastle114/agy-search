@@ -6,6 +6,7 @@ from fake_agy_search_recovery_primary import emit_recovery_primary
 from fake_agy_search_recovery_scope import emit_recovered_scope
 from fake_agy_search_restrictions import restricted_query
 from fake_agy_search_single_scope import emit_single_scope
+from fake_agy_search_standard_edges import run_standard_edge_scenario
 from fake_agy_search_types import (
     DatePolicy,
     Effort,
@@ -22,6 +23,9 @@ def run_search(
     payload: dict[str, JsonValue], arguments: list[str], emit: Emitter
 ) -> int:
     query = str(payload["query"])
+    edge_result = run_standard_edge_scenario(query, emit)
+    if edge_result is not None:
+        return edge_result
     if query == "fixture" and "source_restriction" in payload:
         return 31
     scope = payload.get("scope")
@@ -100,6 +104,10 @@ def run_search(
             "grounding-multiple-lines": "multiple-lines",
         }[query]
         url = f"https://vertexaisearch.cloud.google.com/grounding-api-redirect/{token}"
+    elif query == "grounding-google-wrapper":
+        url = "https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fcanonical"
+    elif query == "grounding-trailing-dot":
+        url = "https://vertexaisearch.cloud.google.com./grounding-api-redirect/token"
     elif query in {"source-domain-subdomain", "source-exact-url"}:
         url = "https://doc.rust-lang.org/book/"
     elif query == "source-domain-lookalike":

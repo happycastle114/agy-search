@@ -37,6 +37,27 @@ pub(super) fn validate_standard_provenance(
     Ok(())
 }
 
+pub(super) fn project_unbound_standard_dates(
+    sources: &mut [WebSource],
+    audit: &EvidenceAudit,
+) -> Result<(), AgyError> {
+    validate_syntax(sources)?;
+    for source in sources {
+        let Some(public_date) = source.date.as_deref() else {
+            continue;
+        };
+        let public_date = CalendarDate::parse(public_date).map_err(|_| AgyError::OutputInvalid)?;
+        if !audit
+            .candidates
+            .iter()
+            .any(|candidate| binds_public_date(candidate, source, &public_date))
+        {
+            source.date = None;
+        }
+    }
+    Ok(())
+}
+
 fn validate_update(last_updated: Option<&str>) -> Result<(), AgyError> {
     let Some(last_updated) = last_updated else {
         return Ok(());
@@ -178,5 +199,61 @@ mod tests {
         // Then: only the standard-only provenance stage rejects the mismatch.
         assert!(syntax.is_ok());
         assert!(matches!(provenance, Err(AgyError::OutputInvalid)));
+    }
+
+    #[test]
+    fn standard_projection_clears_only_the_unbound_public_date() {
+        // Given: a valid exact day whose audit text identifies only the month.
+        let mut sources = [source(&json!("2013-02-20"), &serde_json::Value::Null)];
+        let evidence = audit(
+            &json!("2013-02-20"),
+            &json!("February 2013"),
+            &json!("Published February 2013"),
+        );
+
+        // When: latency-sensitive Standard Search projects optional metadata.
+        let result = project_unbound_standard_dates(&mut sources, &evidence);
+
+        // Then: the source survives while the unsupported exact day does not.
+        assert!(result.is_ok());
+        assert_eq!(sources[0].date, None);
+    }
+
+    #[test]
+    fn standard_projection_preserves_a_bound_public_date() {
+        // Given: an exact day bound to the same source text and excerpt.
+        let mut sources = [source(&json!("1999-06-01"), &serde_json::Value::Null)];
+        let evidence = audit(
+            &json!("1999-06-01"),
+            &json!("June 1, 1999"),
+            &json!("Published June 1, 1999"),
+        );
+
+        // When: Standard Search projects optional metadata.
+        let result = project_unbound_standard_dates(&mut sources, &evidence);
+
+        // Then: verified metadata remains intact.
+        assert!(result.is_ok());
+        assert_eq!(sources[0].date.as_deref(), Some("1999-06-01"));
+    }
+
+    #[test]
+    fn standard_projection_rejects_malformed_dates_before_clearing() {
+        // Given: malformed public metadata that cannot be interpreted as a calendar date.
+        let mut sources = [source(
+            &json!("February 20, 2013"),
+            &serde_json::Value::Null,
+        )];
+        let evidence = audit(
+            &json!("2013-02-20"),
+            &json!("February 20, 2013"),
+            &json!("Published February 20, 2013"),
+        );
+
+        // When: Standard Search attempts the projection.
+        let result = project_unbound_standard_dates(&mut sources, &evidence);
+
+        // Then: malformed metadata is rejected instead of silently erased.
+        assert!(matches!(result, Err(AgyError::OutputInvalid)));
     }
 }
