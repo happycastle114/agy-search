@@ -102,8 +102,10 @@ def main() -> int:
 def redirect_main(arguments: list[str]) -> int:
     try:
         source_url = arguments[arguments.index(SourceCurlFlag.URL.value) + 1]
-        final = RedirectFinal(os.environ["AGY_SEARCH_REDIRECT_FINAL"])
-    except (ValueError, IndexError, KeyError):
+        final = RedirectFinal(
+            os.environ.get("AGY_SEARCH_REDIRECT_FINAL", RedirectFinal.ALLOWED.value)
+        )
+    except (ValueError, IndexError):
         return 64
     parsed = urlparse(source_url)
     if parsed.hostname == "vertexaisearch.cloud.google.com":

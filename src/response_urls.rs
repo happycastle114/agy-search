@@ -112,6 +112,22 @@ impl ResponseDocument {
             .collect())
     }
 
+    pub(crate) fn direct_search_urls(&self) -> Result<Vec<HttpUrl>, AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        let mut seen = HashSet::new();
+        Ok(value
+            .results
+            .iter()
+            .map(|item| &item.url)
+            .chain(value.evidence_audit.candidates.iter().map(|item| &item.url))
+            .filter(|url| url.source_kind() == SourceUrlKind::Direct)
+            .filter(|url| seen.insert((*url).clone()))
+            .cloned()
+            .collect())
+    }
+
     pub(crate) fn remove_search_url(&mut self, removed: &HttpUrl) -> Result<(), AgyError> {
         let Self::Search(value) = self else {
             return Err(AgyError::OutputInvalid);

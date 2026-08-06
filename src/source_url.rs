@@ -79,29 +79,50 @@ enum KnownGoogleHost {
     VertexAiSearch,
     GoogleSearch,
     GoogleNews,
+    GoogleShortener,
     Other,
 }
 
 impl KnownGoogleHost {
     fn parse(host: Option<&str>) -> Self {
         const VERTEX_AI_SEARCH: &str = "vertexaisearch.cloud.google.com";
-        const GOOGLE_SEARCH: [&str; 2] = ["google.com", "www.google.com"];
-        const GOOGLE_NEWS: &str = "news.google.com";
+        const GOOGLE_SHORTENERS: [&str; 2] = ["g.co", "goo.gl"];
+        const GOOGLE_TRANSPORT_LABELS: [&str; 5] = [
+            "google",
+            "googleadservices",
+            "googleapis",
+            "googleusercontent",
+            "gstatic",
+        ];
 
         let Some(host) = host.map(|value| value.trim_end_matches('.')) else {
             return Self::Other;
         };
         if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
             Self::VertexAiSearch
-        } else if GOOGLE_SEARCH
+        } else if GOOGLE_SHORTENERS
             .iter()
             .any(|candidate| host.eq_ignore_ascii_case(candidate))
         {
-            Self::GoogleSearch
-        } else if host.eq_ignore_ascii_case(GOOGLE_NEWS) {
-            Self::GoogleNews
+            Self::GoogleShortener
         } else {
-            Self::Other
+            let mut labels = host.split('.');
+            let first = labels.next();
+            let second = labels.next();
+            let is_google_transport = first.into_iter().chain(second).chain(labels).any(|label| {
+                GOOGLE_TRANSPORT_LABELS
+                    .iter()
+                    .any(|candidate| label.eq_ignore_ascii_case(candidate))
+            });
+            if !is_google_transport {
+                Self::Other
+            } else if first.is_some_and(|label| label.eq_ignore_ascii_case("news"))
+                && second.is_some_and(|label| label.eq_ignore_ascii_case("google"))
+            {
+                Self::GoogleNews
+            } else {
+                Self::GoogleSearch
+            }
         }
     }
 
@@ -122,6 +143,7 @@ impl KnownGoogleHost {
             {
                 SourceUrlKind::GroundingRedirect
             }
+            Self::GoogleShortener => SourceUrlKind::GroundingRedirect,
             Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews => {
                 SourceUrlKind::NonSource
             }
@@ -161,6 +183,10 @@ mod tests {
             "https://www.google.com/url?q=https%3A%2F%2Fexample.com",
             "https://google.com/url?url=https%3A%2F%2Fexample.com",
             "https://news.google.com/articles/example",
+            "https://www.google.co.kr/search?q=korean+market",
+            "https://news.google.co.uk/articles/example",
+            "https://googleusercontent.com/cached-source",
+            "https://g.co/example",
         ] {
             let url = HttpUrl::parse(value).expect("Google transport URL must parse");
             assert_ne!(url.source_kind(), SourceUrlKind::Direct, "URL: {value}");

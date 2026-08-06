@@ -87,9 +87,9 @@ def run_search(
         if effort_index is None or arguments[effort_index + 1] != Effort.LOW.value:
             return 25
         url = (
-            "https://primary.example/source"
+            "https://example.com/primary-source"
             if payload.get("source_policy") == SourcePolicy.PRIMARY_FIRST.value
-            else "https://aggregator.example/summary"
+            else "https://iana.org/aggregator-summary"
         )
     elif query == "invalid-source":
         url = "file:///private/source"

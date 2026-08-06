@@ -157,10 +157,11 @@ its multiple public sources, requires every candidate's value and exact
 source-date text in a same-URL source, requires each structured source date to
 be ISO and audit-backed, and requires the unique latest candidate to remain
 publicly visible; it is one-shot and never recovers or emits a partial report.
-Google grounding transport links are resolved with bounded, HTTPS-only curl
-arguments before validation; only the direct final URL can reach public JSON.
-Each manual redirect hop is parsed, DNS-validated, and pinned before the next
-request.
+Every Standard Search result and audit URL is validated with bounded,
+HTTPS-only, header-only curl arguments. Google grounding transports are
+resolved; direct URLs are probed; dead, unsafe, regional Google search, and
+cache rows are discarded with their audit rows. Each redirect hop is parsed,
+DNS-validated, and pinned before the next request.
 
 Preserve a hard caller constraint such as `only official`, `only first-party`,
 or `only project-maintained` in the query. Do not infer ownership from a domain

@@ -6,9 +6,14 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 fn command() -> Command {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root.join("tests/fixtures/fake_agy.py");
+    let curl = root.join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
-    command.arg("--agy-path").arg(fixture);
+    command
+        .arg("--agy-path")
+        .arg(fixture)
+        .env("AGY_SEARCH_CURL_PATH", curl);
     command
 }
 

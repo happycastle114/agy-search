@@ -16,10 +16,12 @@ fn fixture_agy() -> PathBuf {
 }
 
 fn command(trace: &Path) -> Command {
+    let curl = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_curl.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
     command
         .arg("--agy-path")
         .arg(fixture_agy())
+        .env("AGY_SEARCH_CURL_PATH", curl)
         .env("AGY_SEARCH_CATALOG_TRACE", trace);
     command
 }

@@ -56,8 +56,8 @@ cargo install --git https://github.com/happycastle114/agy-search --locked
 ## Requirements
 
 - An installed and signed-in Google Antigravity CLI 1.1.10 or newer
-- `curl`, used for bounded grounding-link normalization and opt-in temporal
-  source-body verification
+- `curl`, used for bounded Standard Search terminal-URL validation and opt-in
+  temporal source-body verification
 - Web tools available to the selected Antigravity model
 
 ```bash
@@ -68,8 +68,8 @@ agy-search --version
 agy --version
 ```
 
-Run `agy models` only to choose an explicit model pin; ordinary searches do not
-need model discovery.
+Run `agy models` yourself only to choose an explicit model pin. An unpinned
+low-effort Standard Search owns its single bounded advisory lookup internally.
 
 Before every content command, and before `status` claims availability,
 `agy-search` runs the cheap `agy --version` preflight. It accepts exactly the
@@ -143,7 +143,8 @@ when the task needs deeper synthesis. For Search and Research, `--domain` is a
 caller-owned domain-tree allowlist (the named host plus its subdomains), while
 `--source-url` is a canonical exact-URL allowlist. In standard mode, either flag
 restricts returned/audited membership only and `--source-url` does not fetch a
-source body. Use `--verification temporal-comparison` as temporal source
+source body. Standard Search still performs a metadata-only terminal HTTPS
+reachability check. Use `--verification temporal-comparison` as temporal source
 verification across 1-8 exact caller-owned `--scope` values and 1-8 canonical
 HTTPS `--source-url` values. One scope verifies that exact latest tuple and
 requires `--as-of`; 2-8 scopes additionally select the unique newest member of
@@ -252,11 +253,13 @@ identifiers, or tool payloads.
   deadline. Standard mode never uses this fetch path.
 - Preserves exact search constraints and uses the second bounded tool call only
   to locate or read the canonical evidence page when verification needs it.
-- Resolves only Google grounding transport links through shell-free fixed curl
-  arguments: HTTPS-only protocols, five redirects, bounded connect/request time,
-  no response body, and a single validated direct target. Each manual redirect
-  hop is parsed, DNS-validated, and pinned before the next request; resolution
-  failures remain exit 6 rather than exposing transport URLs.
+- Validates every Standard Search result and audit URL through shell-free fixed
+  curl arguments: HTTPS-only protocols, five redirects, bounded
+  connect/request time, no response body, and one DNS-pinned terminal target.
+  Google search, transport, and cache origins are never public sources. A
+  failed or unsafe row is removed with its audit row; the existing single retry
+  is used only when no publishable result survives. Each redirect hop is parsed,
+  public-address validated, and pinned before the next request.
 - Counts every attempted built-in `search_web` or `read_url_content` lifecycle
   toward the budget and requires all started calls to complete successfully.
 - Rejects generic MCP calls and merely started tools as provenance.

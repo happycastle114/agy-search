@@ -20,7 +20,7 @@ pub(crate) enum StandardSearchResolution {
 }
 
 #[derive(Debug)]
-enum TransportOutcome {
+enum SourceOutcome {
     Reachable(HttpUrl),
     Dead,
 }
@@ -37,7 +37,9 @@ pub(crate) async fn resolve_standard_search_run(
             restriction,
         } => Some((transports.clone(), restriction.clone())),
     };
+    let has_direct_sources = !run.response.direct_search_urls()?.is_empty();
     let needs_resolver = !response_transports.is_empty()
+        || has_direct_sources
         || restricted
             .as_ref()
             .is_some_and(|(transports, _)| !transports.is_empty());
@@ -46,6 +48,7 @@ pub(crate) async fn resolve_standard_search_run(
     } else {
         None
     };
+    let mut verified_sources = HashSet::new();
 
     if let Some((transports, restriction)) = restricted {
         let restricted_transports = transports.iter().cloned().collect::<HashSet<_>>();
@@ -57,24 +60,41 @@ pub(crate) async fn resolve_standard_search_run(
                     return Err(AgyError::OutputInvalid);
                 }
                 run.response.replace_url(&transport, &direct);
+                verified_sources.insert(direct);
             }
         }
         response_transports.retain(|transport| !restricted_transports.contains(transport));
     }
 
     if !response_transports.is_empty() {
-        let resolver = resolver.ok_or(AgyError::OutputInvalid)?;
+        let resolver = resolver.as_ref().ok_or(AgyError::OutputInvalid)?.clone();
         for (transport, outcome) in resolve_bounded(resolver, response_transports).await? {
             match outcome {
-                TransportOutcome::Reachable(direct) => {
+                SourceOutcome::Reachable(direct) => {
                     run.response.replace_url(&transport, &direct);
+                    verified_sources.insert(direct);
                 }
-                TransportOutcome::Dead => run.response.remove_search_url(&transport)?,
+                SourceOutcome::Dead => run.response.remove_search_url(&transport)?,
             }
         }
     }
     for non_source in run.response.non_source_search_urls()? {
         run.response.remove_search_url(&non_source)?;
+    }
+    let direct_sources = run
+        .response
+        .direct_search_urls()?
+        .into_iter()
+        .filter(|source| !verified_sources.contains(source))
+        .collect::<Vec<_>>();
+    if !direct_sources.is_empty() {
+        let resolver = resolver.ok_or(AgyError::OutputInvalid)?;
+        for (source, outcome) in resolve_bounded(resolver, direct_sources).await? {
+            match outcome {
+                SourceOutcome::Reachable(direct) => run.response.replace_url(&source, &direct),
+                SourceOutcome::Dead => run.response.remove_search_url(&source)?,
+            }
+        }
     }
     if run.response.search_results_empty()? {
         Ok(StandardSearchResolution::NoReachableResults)
@@ -85,31 +105,28 @@ pub(crate) async fn resolve_standard_search_run(
 
 async fn resolve_bounded(
     resolver: RedirectResolver,
-    transports: Vec<HttpUrl>,
-) -> Result<Vec<(HttpUrl, TransportOutcome)>, AgyError> {
+    sources: Vec<HttpUrl>,
+) -> Result<Vec<(HttpUrl, SourceOutcome)>, AgyError> {
     let mut pending = JoinSet::new();
     let mut completed = BTreeMap::new();
     let mut next = 0;
-    while next < transports.len() || !pending.is_empty() {
-        while next < transports.len() && pending.len() < MAX_PROJECTION_CONCURRENCY {
-            let transport = transports
-                .get(next)
-                .cloned()
-                .ok_or(AgyError::OutputInvalid)?;
+    while next < sources.len() || !pending.is_empty() {
+        while next < sources.len() && pending.len() < MAX_PROJECTION_CONCURRENCY {
+            let source = sources.get(next).cloned().ok_or(AgyError::OutputInvalid)?;
             let worker = resolver.clone();
             let index = next;
             pending.spawn(async move {
-                let result = worker.resolve_one(&transport).await;
-                (index, transport, result)
+                let result = worker.resolve_one(&source).await;
+                (index, source, result)
             });
             next += 1;
         }
         match pending.join_next().await {
-            Some(Ok((index, transport, Ok(direct)))) => {
-                completed.insert(index, (transport, TransportOutcome::Reachable(direct)));
+            Some(Ok((index, source, Ok(direct)))) => {
+                completed.insert(index, (source, SourceOutcome::Reachable(direct)));
             }
-            Some(Ok((index, transport, Err(AgyError::OutputInvalid)))) => {
-                completed.insert(index, (transport, TransportOutcome::Dead));
+            Some(Ok((index, source, Err(AgyError::OutputInvalid)))) => {
+                completed.insert(index, (source, SourceOutcome::Dead));
             }
             Some(Ok((_, _, Err(error)))) => {
                 abort_and_drain(&mut pending).await;
@@ -122,7 +139,7 @@ async fn resolve_bounded(
             None => {}
         }
     }
-    if completed.len() != transports.len() {
+    if completed.len() != sources.len() {
         return Err(AgyError::OutputInvalid);
     }
     Ok(completed.into_values().collect())

@@ -90,6 +90,14 @@ elif mode in {"two-origins", "two-origins-one-dead", "retry-projection"}:
     else:
         location = None
         status = 200
+elif mode == "direct-validation":
+    path = urlparse(url).path
+    if path == "/redirecting":
+        location, status = "https://iana.org/terminal", 302
+    elif path.startswith("/dead-"):
+        location, status = None, 404
+    else:
+        location, status = None, 200
 elif mode == "private-v4":
     location, status = "https://127.0.0.1/secret", 302
 elif mode == "private-v6":

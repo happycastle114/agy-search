@@ -1,12 +1,30 @@
 """Deterministic standard-search provenance and retry scenarios."""
 
+from enum import Enum
 import os
 
 from fake_agy_search_types import Emitter, JsonValue
 
 
+class DirectSourceCase(str, Enum):
+    HTTP_FIRST = "standard-direct-http-first"
+    PRIVATE_FIRST = "standard-direct-private-first"
+    LOCALHOST_DOT_FIRST = "standard-direct-localhost-dot-first"
+    DEAD_FIRST = "standard-direct-dead-first"
+    REGIONAL_GOOGLE_FIRST = "standard-regional-google-first"
+    MIXED = "standard-direct-mixed"
+    REDIRECT = "standard-direct-redirect"
+
+
 def run_standard_edge_scenario(query: str, emit: Emitter) -> int | None:
     """Emit a focused standard-search edge case when the query names one."""
+    try:
+        direct_source_case = DirectSourceCase(query)
+    except ValueError:
+        direct_source_case = None
+    if direct_source_case is not None:
+        _emit_direct_source_result(direct_source_case, emit, _invocation_count())
+        return 0
     match query:
         case "standard-date-korean":
             url = "https://example.com/korean-date"
@@ -235,4 +253,59 @@ def _emit_non_source_retry_result(query: str, emit: Emitter, invocation: int) ->
         "search_web",
         1,
         query,
+    )
+
+
+def _emit_direct_source_result(
+    scenario: DirectSourceCase, emit: Emitter, invocation: int
+) -> None:
+    if scenario is DirectSourceCase.MIXED:
+        urls = ["https://example.com/reachable", "https://iana.org/dead-direct"]
+    elif scenario is DirectSourceCase.REDIRECT:
+        urls = ["https://example.com/redirecting"]
+    elif invocation > 1:
+        urls = ["https://example.com/direct-safe"]
+    else:
+        unsafe_urls = {
+            DirectSourceCase.HTTP_FIRST: "http://example.com/unsafe",
+            DirectSourceCase.PRIVATE_FIRST: "https://127.0.0.1/unsafe",
+            DirectSourceCase.LOCALHOST_DOT_FIRST: "https://localhost./unsafe",
+            DirectSourceCase.DEAD_FIRST: "https://dead.invalid/unsafe",
+            DirectSourceCase.REGIONAL_GOOGLE_FIRST: (
+                "https://www.google.co.kr/search?q=korean+market"
+            ),
+        }
+        urls = [unsafe_urls[scenario]]
+    results: list[JsonValue] = [
+        {
+            "title": f"Direct source {index}",
+            "url": url,
+            "snippet": f"Direct evidence {index}",
+            "date": None,
+            "last_updated": None,
+        }
+        for index, url in enumerate(urls)
+    ]
+    candidates: list[JsonValue] = [
+        {
+            "scope": f"direct source {index}",
+            "claim": f"Direct evidence {index}",
+            "url": url,
+            "date": None,
+        }
+        for index, url in enumerate(urls)
+    ]
+    emit(
+        {
+            "object": "search",
+            "evidence_audit": {
+                "candidates": candidates,
+                "coverage_complete": True,
+                "conclusion": scenario.value,
+            },
+            "results": results,
+        },
+        "search_web",
+        1,
+        scenario.value,
     )

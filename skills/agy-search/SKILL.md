@@ -318,10 +318,12 @@ artifacts until the answer is complete so provenance can be checked.
 ## Validate evidence
 
 - Require exit code 0 and the response `object` matching the command.
-- Cite only returned `http://` or `https://` URLs that directly support a claim.
-- The CLI resolves Google grounding transport links before output; never expose
-  or reconstruct one yourself. Each manual redirect hop is independently
-  parsed, DNS-validated, and pinned before it can be followed.
+- Cite only returned URLs that directly support a claim. Standard Search
+  exposes only terminal public HTTPS URLs.
+- The CLI validates direct URLs and resolves Google grounding transports before
+  Standard Search output; never expose or reconstruct a discarded URL. Each
+  redirect hop is independently parsed, DNS-validated, and pinned before it can
+  be followed.
 - For research, require every cited URL to appear in `sources`.
 - Interpret `date` only as an explicit publication/release date and
   `last_updated` only as an explicit modification/update date. In Standard

@@ -166,7 +166,7 @@ fn grounding_tool_read_rejects_a_final_url_outside_exact_source()
 }
 
 #[test]
-fn unrestricted_tool_read_does_not_trigger_redirect_resolution()
+fn unrestricted_tool_read_does_not_resolve_the_hidden_transport()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: an unrestricted run with a grounding tool read and direct terminal output.
     let temporary = TempDir::new()?;
@@ -178,7 +178,15 @@ fn unrestricted_tool_read_does_not_trigger_redirect_resolution()
         .assert()
         .success();
 
-    // Then: no redirect transport was invoked solely for the hidden tool read.
-    assert!(!fixtures.trace.exists());
+    // Then: only the public direct result is probed; the hidden transport is untouched.
+    let records = fs::read_to_string(&fixtures.trace)?
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records.first().and_then(|record| record.get("url")),
+        Some(&json!("https://example.com/canonical"))
+    );
     Ok(())
 }
