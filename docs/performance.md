@@ -78,6 +78,41 @@ particular live execution, not Rust wrapper overhead or a latency promise.
 | Temporal v26 comparison | 40.51 s | Returned validated JSON |
 | Final one-scope exact-source temporal search | 29.05 s | Corrected to CLI 1.1.10 / 2026-08-03 from the verified source body |
 
+### Light-search model comparison
+
+On 2026-08-06, the installed 0.2.5 CLI and Antigravity CLI 1.1.10 ran one
+stable IANA lookup three times per arm in rotated serial order. Every attempt
+recorded latency when it exited successfully and emitted one successful terminal
+event. An oracle pass additionally required null unlabeled dates, an IANA source,
+and a public answer covering both reservation and registration.
+
+| Arm | Oracle passes | Median | Maximum (3 runs) |
+|---|---:|---:|---:|
+| `gemini-3.6-flash-low` | 3/3 | 20.27 s | 21.06 s |
+| `gemini-3.5-flash-low` | 3/3 | 24.51 s | 25.83 s |
+| Implicit low-effort default | 2/3 | 21.72 s | 22.48 s |
+| Flash Lite | Not run | — | — |
+
+`gemini-3.6-flash-low` was the fastest eligible arm: its median was 4.24
+seconds (17.3%) below `gemini-3.5-flash-low`. The implicit arm was not eligible
+because one public result omitted the requested registration answer, regardless
+of its latency. Antigravity exposed no Flash Lite slug through `agy models`, so
+the benchmark did not invent one or substitute another model.
+
+An explicit model pays dynamic discovery before content: five local runs put
+`agy models` at 3.020 seconds mean, versus 45.8 milliseconds for `agy
+--version`. The 3.6 arm still had the lowest eligible end-to-end median. The
+remaining common post-model time includes fail-closed grounding redirect
+resolution that replaces Google transport URLs with direct source URLs; do not
+remove that source-quality and SSRF boundary to improve a benchmark number.
+
+Keep ordinary calls unpinned so model catalog drift cannot break the default
+path. When a caller explicitly prioritizes current light-search latency, first
+run `agy-search models` and pin `gemini-3.6-flash-low` only if that exact slug is
+returned, with matching `--effort low`. Re-run this comparison before changing
+that recommendation because provider behavior and the runtime catalog can
+change independently of this wrapper.
+
 Provider variability is material. Earlier attempts in the same evidence series
 failed closed for model/effort mismatch, source-class violations, insufficiently
 labeled inference, or temporal evidence rejection; a failed attempt is not a
