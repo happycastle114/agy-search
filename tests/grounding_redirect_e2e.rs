@@ -79,6 +79,8 @@ fn resolves_real_style_relative_and_query_redirect_chain_with_hardened_pinned_ho
         record["argv"].as_array().is_some_and(|argv| {
             argv.first() == Some(&json!("--disable"))
                 && !argv.contains(&json!("--location"))
+                && argv.contains(&json!("--head"))
+                && !argv.contains(&json!("--max-filesize"))
                 && argv
                     .windows(2)
                     .any(|pair| pair == [json!("--noproxy"), json!("*")])
@@ -88,6 +90,52 @@ fn resolves_real_style_relative_and_query_redirect_chain_with_hardened_pinned_ho
                 && argv.iter().any(|value| value == "--resolve")
         })
     }));
+    Ok(())
+}
+
+#[test]
+fn resolves_large_final_content_length_with_header_only_requests()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Given: a redirect chain whose direct destination advertises a 1.86 MB body.
+    let (_temporary, curl) = fake_curl()?;
+    let trace = curl.with_extension("trace");
+
+    // When: the CLI normalizes the grounding transport URL.
+    let assertion = command(&curl, &trace, "large-final-body")
+        .args(["search", "grounding-redirect"])
+        .assert()
+        .success();
+    let search: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    // Then: each hop is a header-only request, so the final Content-Length cannot trip a body cap.
+    assert_eq!(
+        search.pointer("/results/0/url"),
+        Some(&json!("https://example.com/canonical?source=grounding"))
+    );
+    let records = trace_records(&trace)?;
+    assert_eq!(records.len(), 3);
+    assert!(records.iter().all(|record| {
+        record["argv"].as_array().is_some_and(|argv| {
+            argv.contains(&json!("--head")) && !argv.contains(&json!("--max-filesize"))
+        })
+    }));
+    Ok(())
+}
+
+#[test]
+fn rejects_nonzero_redirect_transport_as_invalid_output() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Given: a resolver transport that exits with a curl-style transport failure status.
+    let (_temporary, curl) = fake_curl()?;
+    let trace = curl.with_extension("trace");
+
+    // When/Then: transport failure cannot be reported as an Antigravity process failure.
+    command(&curl, &trace, "transport-failure")
+        .args(["search", "grounding-redirect"])
+        .assert()
+        .code(6)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::eq("error: agy output invalid\n"));
     Ok(())
 }
 

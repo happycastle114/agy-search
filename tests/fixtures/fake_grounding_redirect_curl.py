@@ -33,10 +33,17 @@ except (ValueError, IndexError):
 host = urlparse(url).hostname
 if host is None or not resolve.startswith(f"{host}:443:"):
     raise SystemExit(64)
+initial = "/grounding-api-redirect/" in urlparse(url).path
 with open(os.environ["AGY_REDIRECT_TRACE"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps({"url": url, "argv": args}) + "\n")
 
-initial = "/grounding-api-redirect/" in urlparse(url).path
+if mode == "large-final-body" and not initial and host != "vertexaisearch.cloud.google.com":
+    if "--head" not in args or "--max-filesize" in args:
+        print("Maximum file size exceeded", file=sys.stderr)
+        raise SystemExit(63)
+if mode == "transport-failure":
+    raise SystemExit(63)
+
 if mode == "success":
     if initial:
         location = "../continue?token=real-style"
@@ -107,11 +114,20 @@ elif mode == "redirect-without-location":
     location, status = None, 302
 elif mode == "success-with-location":
     location, status = "https://example.com/unexpected", 200
+elif mode == "large-final-body":
+    if initial:
+        location, status = "../continue?token=real-style", 302
+    elif host == "vertexaisearch.cloud.google.com":
+        location, status = "https://example.com/canonical?source=grounding", 307
+    else:
+        location, status = None, 200
 else:
     raise SystemExit(64)
 
 sys.stdout.write(f"HTTP/1.1 {status} Test\r\n")
 if location is not None:
     sys.stdout.write(f"Location: {location}\r\n")
+if mode == "large-final-body" and not initial and host != "vertexaisearch.cloud.google.com":
+    sys.stdout.write("Content-Length: 1860000\r\n")
 sys.stdout.write("\r\n")
 sys.stdout.write(f"\nAGY_REDIRECT_META:{status}:0\n")

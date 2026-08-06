@@ -41,7 +41,8 @@ impl<'a> RedirectTransport<'a> {
             },
             CaptureLimits::new(MAX_HEADER_BYTES, MAX_STDERR_BYTES),
         )
-        .await?;
+        .await
+        .map_err(|error| map_transport_error(&error))?;
         parse_hop_response(&output.stdout)
     }
 }
@@ -71,6 +72,7 @@ fn curl_argv(program: &str, source: &PinnedSource, timeout: Duration) -> Vec<Str
         "--silent",
         "--show-error",
         "--fail",
+        "--head",
         "--proto",
         "=https",
         "--proto-redir",
@@ -86,8 +88,6 @@ fn curl_argv(program: &str, source: &PinnedSource, timeout: Duration) -> Vec<Str
         connect,
         "--max-time".to_owned(),
         seconds,
-        "--max-filesize".to_owned(),
-        MAX_HEADER_BYTES.to_string(),
         "--resolve".to_owned(),
         format!("{}:443:{address}", source.url().host()),
     ]);
@@ -120,5 +120,17 @@ const fn map_network_error(error: SourceNetworkError) -> AgyError {
         SourceNetworkError::InvalidUrl
         | SourceNetworkError::UnsafeAddress
         | SourceNetworkError::Dns => AgyError::OutputInvalid,
+    }
+}
+
+const fn map_transport_error(error: &AgyError) -> AgyError {
+    match error {
+        AgyError::Timeout => AgyError::Timeout,
+        AgyError::Unavailable => AgyError::Unavailable,
+        AgyError::InvalidCommand
+        | AgyError::ProcessFailed
+        | AgyError::OutputInvalid
+        | AgyError::UnknownModel
+        | AgyError::OutputWrite => AgyError::OutputInvalid,
     }
 }
