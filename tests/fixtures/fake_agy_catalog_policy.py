@@ -10,7 +10,8 @@ from typing import Final
 
 
 PREFERRED_MODEL: Final = "gemini-3.6-flash-low"
-RETRY_MODEL: Final = "gemini-3.6-flash-high"
+FIRST_RETRY_MODEL: Final = "gemini-3.6-flash-medium"
+FINAL_RETRY_MODEL: Final = "gemini-3.6-flash-high"
 TRACE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_TRACE"
 CATALOG_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_MODE"
 CATALOG_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_DELAY"
@@ -104,7 +105,8 @@ def main() -> int:
             return 1
         if mode == "preferred":
             print(PREFERRED_MODEL)
-            print(RETRY_MODEL)
+            print(FIRST_RETRY_MODEL)
+            print(FINAL_RETRY_MODEL)
         print("fixture-model")
         return 0
     trace(

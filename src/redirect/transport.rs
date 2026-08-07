@@ -7,10 +7,18 @@ use crate::{
     error::AgyError,
     process::{CaptureLimits, ProcessRequest, run_bounded},
     source_network::{PinnedSource, SafeSourceUrl, SourceNetworkError, resolve},
+    types::SourceUrlKind,
 };
 
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 const MAX_STDERR_BYTES: usize = 16 * 1024;
+const MAX_PROBE_BODY_BYTES: usize = 2 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProbeMethod {
+    Head,
+    BoundedGet,
+}
 
 #[derive(Clone, Debug)]
 pub(super) struct RedirectTransport {
@@ -29,13 +37,28 @@ impl RedirectTransport {
     }
 
     pub(super) async fn request(&self, source: &SafeSourceUrl) -> Result<HopResponse, AgyError> {
+        let head = self.request_with(source, ProbeMethod::Head).await?;
+        if head.status == super::response::HttpStatus::Other
+            && source.source().source_kind() == SourceUrlKind::Direct
+        {
+            self.request_with(source, ProbeMethod::BoundedGet).await
+        } else {
+            Ok(head)
+        }
+    }
+
+    async fn request_with(
+        &self,
+        source: &SafeSourceUrl,
+        method: ProbeMethod,
+    ) -> Result<HopResponse, AgyError> {
         let pinned = resolve(source.clone(), self.deadline)
             .await
             .map_err(map_network_error)?;
         let timeout = remaining(self.deadline)?;
         let output = run_bounded(
             ProcessRequest {
-                argv: curl_argv(&self.executable, &pinned, timeout),
+                argv: curl_argv(&self.executable, &pinned, timeout, method),
                 cwd: self.cwd.clone(),
                 timeout,
             },
@@ -47,7 +70,12 @@ impl RedirectTransport {
     }
 }
 
-fn curl_argv(program: &str, source: &PinnedSource, timeout: Duration) -> Vec<String> {
+fn curl_argv(
+    program: &str,
+    source: &PinnedSource,
+    timeout: Duration,
+    method: ProbeMethod,
+) -> Vec<String> {
     let seconds = format!("{:.3}", timeout.as_secs_f64().max(0.001));
     let connect = format!("{:.3}", timeout.as_secs_f64().clamp(0.001, 2.0));
     let address = match source.address() {
@@ -71,8 +99,6 @@ fn curl_argv(program: &str, source: &PinnedSource, timeout: Duration) -> Vec<Str
         "",
         "--silent",
         "--show-error",
-        "--fail",
-        "--head",
         "--proto",
         "=https",
         "--proto-redir",
@@ -80,17 +106,26 @@ fn curl_argv(program: &str, source: &PinnedSource, timeout: Duration) -> Vec<Str
         "--tlsv1.2",
         "--max-redirs",
         "0",
-        "--connect-timeout",
     ]
     .map(str::to_owned)
     .to_vec();
     argv.extend([
+        "--connect-timeout".to_owned(),
         connect,
         "--max-time".to_owned(),
         seconds,
         "--resolve".to_owned(),
         format!("{}:443:{address}", source.url().host()),
     ]);
+    match method {
+        ProbeMethod::Head => argv.push("--head".to_owned()),
+        ProbeMethod::BoundedGet => argv.extend([
+            "--range".to_owned(),
+            "0-0".to_owned(),
+            "--max-filesize".to_owned(),
+            MAX_PROBE_BODY_BYTES.to_string(),
+        ]),
+    }
     argv.extend(
         [
             "--dump-header",

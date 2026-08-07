@@ -19,10 +19,33 @@ pub(super) fn require_grounding_transport_urls(schema: &mut Value) -> Result<(),
     definition.insert(
         "description".to_owned(),
         Value::String(
-            "Exact Google grounding transport URL copied from the completed search_web result; the caller resolves it to the terminal publisher URL."
+            "Exact opaque Google grounding transport URL copied from the completed search_web result; placeholders and synthesized identifiers are invalid. The caller resolves the transport to the terminal publisher URL."
                 .to_owned(),
         ),
     );
+    Ok(())
+}
+
+pub(super) fn require_diverse_search_results(
+    schema: &mut Value,
+    result_limit: u16,
+) -> Result<(), AgyError> {
+    if result_limit == 0 {
+        return Err(AgyError::InvalidCommand);
+    }
+    let minimum = u64::from(result_limit.min(2));
+    let maximum = u64::from(result_limit);
+    let candidates = schema
+        .pointer_mut("/$defs/EvidenceAudit/properties/candidates")
+        .and_then(Value::as_object_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    candidates.insert("minItems".to_owned(), Value::from(minimum));
+    let results = schema
+        .pointer_mut("/properties/results")
+        .and_then(Value::as_object_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    results.insert("minItems".to_owned(), Value::from(minimum));
+    results.insert("maxItems".to_owned(), Value::from(maximum));
     Ok(())
 }
 

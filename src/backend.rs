@@ -25,11 +25,13 @@ const MAX_ADVISORY_CATALOG_DISCOVERY: Duration = Duration::from_secs(5);
 struct ContentModels {
     primary: Option<ModelSlug>,
     retry: Option<ModelSlug>,
+    final_retry: Option<ModelSlug>,
 }
 
 impl ContentModels {
     fn fixed(model: Option<ModelSlug>) -> Self {
         Self {
+            final_retry: model.clone(),
             retry: model.clone(),
             primary: model,
         }
@@ -65,15 +67,7 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
                         .await?
                 }
             };
-            content::execute(
-                &agy_path,
-                selected_models.primary,
-                selected_models.retry,
-                effort,
-                deadline,
-                *request,
-            )
-            .await
+            content::execute(&agy_path, selected_models, effort, deadline, *request).await
         }
     }
 }
@@ -147,10 +141,21 @@ async fn select_preferred_search_models(
             let primary = catalog.preferred(preferred);
             let retry = primary
                 .as_ref()
-                .and_then(|_| catalog.preferred(PreferredSearchModel::Gemini36FlashHigh));
+                .and_then(|_| catalog.preferred(PreferredSearchModel::Medium))
+                .or_else(|| {
+                    primary
+                        .as_ref()
+                        .and_then(|_| catalog.preferred(PreferredSearchModel::High))
+                })
+                .or_else(|| primary.clone());
+            let final_retry = primary
+                .as_ref()
+                .and_then(|_| catalog.preferred(PreferredSearchModel::High))
+                .or_else(|| retry.clone());
             Ok(ContentModels {
-                retry: retry.or_else(|| primary.clone()),
                 primary,
+                retry,
+                final_retry,
             })
         }
         Err(_) if deadline.remaining().is_ok() => Ok(ContentModels::fixed(None)),
@@ -166,7 +171,7 @@ const fn preferred_search_model(
     match operation {
         Operation::Search => match verification {
             VerificationMode::Standard => match effort {
-                Some(Effort::Low) => Some(PreferredSearchModel::Gemini36FlashLow),
+                Some(Effort::Low) => Some(PreferredSearchModel::Low),
                 Some(Effort::Medium | Effort::High) | None => None,
             },
             VerificationMode::TemporalComparison => None,

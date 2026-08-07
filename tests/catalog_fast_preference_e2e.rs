@@ -10,7 +10,8 @@ use serde_json::Value;
 use tempfile::TempDir;
 
 const PREFERRED_MODEL: &str = "gemini-3.6-flash-low";
-const RETRY_MODEL: &str = "gemini-3.6-flash-high";
+const FIRST_RETRY_MODEL: &str = "gemini-3.6-flash-medium";
+const FINAL_RETRY_MODEL: &str = "gemini-3.6-flash-high";
 
 fn fixture_agy() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy_catalog_policy.py")
@@ -78,7 +79,7 @@ fn standard_low_search_escalates_only_its_bounded_retry() -> Result<(), Box<dyn 
             serde_json::json!({"kind":"version","model":null,"effort":null}),
             serde_json::json!({"kind":"models","model":null,"effort":null}),
             serde_json::json!({"kind":"content","model":PREFERRED_MODEL,"effort":"low"}),
-            serde_json::json!({"kind":"content","model":RETRY_MODEL,"effort":"high"}),
+            serde_json::json!({"kind":"content","model":FIRST_RETRY_MODEL,"effort":"medium"}),
         ]
     );
     Ok(())
@@ -102,8 +103,8 @@ fn standard_low_search_keeps_the_final_bounded_attempt_on_the_quality_model()
             serde_json::json!({"kind":"version","model":null,"effort":null}),
             serde_json::json!({"kind":"models","model":null,"effort":null}),
             serde_json::json!({"kind":"content","model":PREFERRED_MODEL,"effort":"low"}),
-            serde_json::json!({"kind":"content","model":RETRY_MODEL,"effort":"high"}),
-            serde_json::json!({"kind":"content","model":RETRY_MODEL,"effort":"high"}),
+            serde_json::json!({"kind":"content","model":FIRST_RETRY_MODEL,"effort":"medium"}),
+            serde_json::json!({"kind":"content","model":FINAL_RETRY_MODEL,"effort":"high"}),
         ]
     );
     Ok(())

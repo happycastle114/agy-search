@@ -45,12 +45,14 @@ impl ResponseDocument {
         verification: crate::types::VerificationMode,
         temporal_contract: Option<&crate::temporal_contract::TemporalContract>,
         source_restriction: &crate::source_restriction::SourceRestriction,
+        search_result_limit: Option<u16>,
     ) -> Result<String, AgyError> {
         schema::render(
             operation,
             verification,
             temporal_contract,
             source_restriction,
+            search_result_limit,
         )
     }
 

@@ -51,9 +51,10 @@ pub(super) async fn run_standard_search(
                 StandardSearchRun::Response(response) => Ok(response),
                 StandardSearchRun::NoReachableResults
                 | StandardSearchRun::RecoverableUnlistedTool => {
+                    let final_retry_context = context.for_standard_final_retry();
                     let third = validate_standard_run(
                         run_standard_search_unvalidated_once(
-                            &retry_context,
+                            &final_retry_context,
                             ContentExecution {
                                 operation,
                                 tool_policy,

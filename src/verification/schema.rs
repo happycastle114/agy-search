@@ -161,6 +161,7 @@ mod tests {
             VerificationMode::TemporalComparison,
             Some(&contract),
             &crate::source_restriction::SourceRestriction::Unrestricted,
+            Some(5),
         )
         .expect("temporal schema must render");
         let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
@@ -194,6 +195,7 @@ mod tests {
                 VerificationMode::TemporalComparison,
                 Some(&contract),
                 &crate::source_restriction::SourceRestriction::Unrestricted,
+                (operation == Operation::Search).then_some(5),
             )
             .expect("temporal schema must render")
         });
@@ -209,12 +211,13 @@ mod tests {
     }
 
     #[test]
-    fn standard_schema_keeps_single_candidate_minimum() {
+    fn standard_schema_requires_redundant_candidate_minimum() {
         let schema = ResponseDocument::schema(
             Operation::Search,
             VerificationMode::Standard,
             None,
             &crate::source_restriction::SourceRestriction::Unrestricted,
+            Some(5),
         )
         .expect("standard schema must render");
         let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
@@ -222,7 +225,7 @@ mod tests {
             document
                 .pointer("/$defs/EvidenceAudit/properties/candidates/minItems")
                 .and_then(Value::as_u64),
-            Some(1),
+            Some(2),
         );
         assert!(
             document.pointer("/$defs/WebSource/properties/last_updated/type")

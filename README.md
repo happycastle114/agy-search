@@ -134,6 +134,9 @@ catalog query, bounded to five seconds within the caller deadline, and selects
 absent or the advisory query fails while time remains, content omits `--model`
 and uses the provider default. Temporal Search, Research, Extract, Map, Crawl,
 and medium/high effort Search do not make that preference query. The
+same catalog may supply `gemini-3.6-flash-medium` for the first bounded recovery
+and `gemini-3.6-flash-high` for the final recovery. Missing tiers fall back
+without adding an attempt, and every attempt shares the original deadline. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
 non-default curl executable for the bounded source-link resolver and temporal
@@ -237,8 +240,9 @@ identifiers, or tool payloads.
 - Uses `stream-json` and a generated JSON Schema without forcing plan mode.
 - Disables print-mode slash/skill expansion so request fields remain data.
 - Defaults standard search to low effort: one primary attempt followed, only if
-  no publishable result survives, by at most two bounded recovery attempts on
-  the quality retry model. All attempts share the original invocation deadline.
+  no publishable result survives, by at most two bounded recovery attempts. A
+  complete catalog uses low, then medium, then high. All attempts share the
+  original invocation deadline.
 - Sends typed primary-first, complete-scope, and explicit-source-date policies.
 - Requires an internal evidence audit, validates public URLs against it, and
   removes the audit from the stable public JSON response. Typed temporal
@@ -257,11 +261,13 @@ identifiers, or tool payloads.
   to locate or read the canonical evidence page when verification needs it.
 - Validates every Standard Search result and audit URL through shell-free fixed
   curl arguments: HTTPS-only protocols, five redirects, bounded
-  connect/request time, no response body, and one DNS-pinned terminal target.
+  connect/request time, and one DNS-pinned terminal target. Validation starts
+  with HEAD; publishers that reject HEAD receive one range-requested GET capped
+  at 2 MiB under the same deadline and redirect policy.
   Google search, transport, and cache origins are never public sources. A
   failed or unsafe row is removed with its audit row; if no publishable result
-  survives, standard search may use up to two bounded recovery attempts on the
-  quality retry model. Each redirect hop is parsed, public-address validated,
+  survives, standard search may use up to two bounded recovery attempts. Each
+  redirect hop is parsed, public-address validated,
   and pinned before the next request.
 - Counts every attempted built-in `search_web` or `read_url_content` lifecycle
   toward the budget and requires all started calls to complete successfully.

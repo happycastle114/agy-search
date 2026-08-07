@@ -170,6 +170,24 @@ elif mode == "large-final-body":
         location, status = "https://example.com/canonical?source=grounding", 307
     else:
         location, status = None, 200
+elif mode == "head-rejected-terminal":
+    if initial:
+        location, status = "https://example.com/head-rejected", 302
+    elif "--head" in args:
+        location, status = None, 404
+    else:
+        if "--range" not in args or "--max-filesize" not in args:
+            raise SystemExit(64)
+        location, status = None, 200
+elif mode == "head-rejected-disallowed-redirect":
+    if initial:
+        location, status = "https://example.com/head-rejected", 302
+    elif "--head" in args:
+        location, status = None, 404
+    else:
+        if "--range" not in args or "--max-filesize" not in args:
+            raise SystemExit(64)
+        location, status = "https://iana.org/out-of-scope", 302
 else:
     raise SystemExit(64)
 

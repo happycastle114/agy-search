@@ -42,6 +42,7 @@ pub(super) struct ExecutionContext {
     pub(super) executable: String,
     pub(super) model: Option<ModelSlug>,
     pub(super) retry_model: Option<ModelSlug>,
+    pub(super) final_retry_model: Option<ModelSlug>,
     pub(super) effort: Option<Effort>,
     pub(super) deadline: Deadline,
 }
@@ -49,13 +50,27 @@ pub(super) struct ExecutionContext {
 impl ExecutionContext {
     pub(super) fn for_standard_retry(&self) -> Self {
         let model = self.retry_model.clone().or_else(|| self.model.clone());
+        self.with_standard_model(model)
+    }
+
+    pub(super) fn for_standard_final_retry(&self) -> Self {
+        let model = self
+            .final_retry_model
+            .clone()
+            .or_else(|| self.retry_model.clone())
+            .or_else(|| self.model.clone());
+        self.with_standard_model(model)
+    }
+
+    fn with_standard_model(&self, model: Option<ModelSlug>) -> Self {
         let effort = model
             .as_ref()
             .and_then(ModelSlug::effort_suffix)
             .or(self.effort);
         Self {
             executable: self.executable.clone(),
-            retry_model: model.clone(),
+            retry_model: self.retry_model.clone(),
+            final_retry_model: self.final_retry_model.clone(),
             model,
             effort,
             deadline: self.deadline,
