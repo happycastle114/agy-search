@@ -12,6 +12,9 @@ class DirectSourceCase(str, Enum):
     LOCALHOST_DOT_FIRST = "standard-direct-localhost-dot-first"
     DEAD_FIRST = "standard-direct-dead-first"
     REGIONAL_GOOGLE_FIRST = "standard-regional-google-first"
+    NEWS_PORTAL_FIRST = "standard-news-portal-first"
+    SITE_ROOT_FIRST = "standard-site-root-first"
+    LANDING_PAGE_FIRST = "standard-landing-page-first"
     MIXED = "standard-direct-mixed"
     REDIRECT = "standard-direct-redirect"
 
@@ -274,6 +277,9 @@ def _emit_direct_source_result(
             DirectSourceCase.REGIONAL_GOOGLE_FIRST: (
                 "https://www.google.co.kr/search?q=korean+market"
             ),
+            DirectSourceCase.NEWS_PORTAL_FIRST: "https://v.daum.net/v/20260807120301584",
+            DirectSourceCase.SITE_ROOT_FIRST: "https://example.com/",
+            DirectSourceCase.LANDING_PAGE_FIRST: "https://example.com/main/main.jsp",
         }
         urls = [unsafe_urls[scenario]]
     results: list[JsonValue] = [

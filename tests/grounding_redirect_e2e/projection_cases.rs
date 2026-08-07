@@ -70,7 +70,7 @@ fn rejects_terminal_url_on_grounding_transport_origin() -> Result<(), Box<dyn st
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy output invalid\n"));
 
-    assert_eq!(trace_records(&trace)?.len(), 4);
+    assert_eq!(trace_records(&trace)?.len(), 6);
     Ok(())
 }
 

@@ -1,15 +1,17 @@
 //! Research-tool attempt policy validation.
 
-use crate::types::{Operation, RequiredSearchQuery, ResearchToolPolicy, ScopedQueryKind};
+use crate::types::{Operation, ResearchToolPolicy};
 
 use super::{
     generated_content_policy::{self, ToolAttemptAssessment},
     sequence::{completed_research_tools, has_required_evidence},
     source_policy,
-    stream::{
-        Event, EventName, StepIndex, StepState, StepType, ToolInfo, ToolName, ToolParameters,
-    },
+    stream::{Event, EventName, StepIndex, StepState, StepType, ToolName, ToolParameters},
 };
+
+mod scoped_search;
+
+pub(super) use scoped_search::attempts_are_valid as scoped_search_attempts_are_valid;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum EvidencePolicyAssessment {
@@ -187,95 +189,4 @@ fn completed_research_attempt_count(events: &[Event]) -> Option<usize> {
     }
 
     active.is_empty().then_some(attempt_count)
-}
-
-pub(super) fn scoped_search_attempts_are_valid(
-    events: &[Event],
-    required_query: &RequiredSearchQuery,
-) -> bool {
-    let Some(attempt_count) = completed_research_attempt_count(events) else {
-        return false;
-    };
-    let tool_steps = events
-        .iter()
-        .filter_map(|event| {
-            (event.kind == EventName::StepUpdate)
-                .then_some(event.step_update.as_ref())
-                .flatten()
-                .filter(|step| step.step_type == StepType::Tool)
-        })
-        .collect::<Vec<_>>();
-    if tool_steps.is_empty() {
-        return false;
-    }
-    if tool_steps.iter().any(|step| {
-        !matches!(
-            step.tool_info.as_ref(),
-            Some(ToolInfo {
-                name: ToolName::SearchWeb,
-                ..
-            })
-        )
-    }) {
-        return false;
-    }
-    let active = tool_steps
-        .iter()
-        .filter(|step| step.state == Some(StepState::Active))
-        .collect::<Vec<_>>();
-    let Some(first_active) = active.first() else {
-        return false;
-    };
-    if attempt_count > 2
-        || active.len() > 2
-        || !query_matches_exact(first_active, required_query)
-        || active
-            .iter()
-            .skip(1)
-            .any(|step| !query_has_required_prefix(step, required_query))
-    {
-        return false;
-    }
-    let successful = tool_steps
-        .iter()
-        .filter_map(|step| {
-            (step.state == Some(StepState::Done))
-                .then_some(step.tool_info.as_ref())
-                .flatten()
-                .filter(|info| info.error.is_none())
-        })
-        .collect::<Vec<_>>();
-    !successful.is_empty()
-        && successful.len() <= active.len()
-        && successful
-            .iter()
-            .all(|info| query_matches_info(info, required_query))
-}
-
-fn query_matches_exact(
-    step: &super::stream::StepUpdate,
-    required_query: &RequiredSearchQuery,
-) -> bool {
-    step.tool_info.as_ref().is_some_and(|info| {
-        info.parameters
-            .as_ref()
-            .and_then(|parameters| parameters.query.as_deref())
-            .is_some_and(|query| required_query.classify(query) == ScopedQueryKind::Initial)
-    })
-}
-
-fn query_has_required_prefix(
-    step: &super::stream::StepUpdate,
-    required_query: &RequiredSearchQuery,
-) -> bool {
-    step.tool_info
-        .as_ref()
-        .is_some_and(|info| query_matches_info(info, required_query))
-}
-
-fn query_matches_info(info: &ToolInfo, required_query: &RequiredSearchQuery) -> bool {
-    info.parameters
-        .as_ref()
-        .and_then(|parameters| parameters.query.as_deref())
-        .is_some_and(|query| required_query.classify(query) != ScopedQueryKind::Invalid)
 }

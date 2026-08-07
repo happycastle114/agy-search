@@ -1,6 +1,6 @@
 [package]
 name = "agy-search"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2024"
 rust-version = "1.88"
 description = "Source-backed web research CLI for Google Antigravity"

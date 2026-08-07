@@ -6,6 +6,9 @@ use assert_cmd::Command;
 use serde_json::Value;
 use tempfile::TempDir;
 
+#[path = "source_restriction_e2e/portal_cases.rs"]
+mod portal_cases;
+
 fn fixture_agy() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py")
 }

@@ -98,6 +98,11 @@ elif mode == "direct-validation":
         location, status = None, 404
     else:
         location, status = None, 200
+elif mode == "restricted-disallowed":
+    if initial:
+        location, status = "https://iana.org/out-of-scope", 302
+    else:
+        location, status = None, 200
 elif mode == "private-v4":
     location, status = "https://127.0.0.1/secret", 302
 elif mode == "private-v6":

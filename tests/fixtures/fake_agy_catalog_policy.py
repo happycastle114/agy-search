@@ -10,10 +10,12 @@ from typing import Final
 
 
 PREFERRED_MODEL: Final = "gemini-3.6-flash-low"
+RETRY_MODEL: Final = "gemini-3.6-flash-high"
 TRACE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_TRACE"
 CATALOG_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_MODE"
 CATALOG_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_DELAY"
 CONTENT_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CONTENT_DELAY"
+CONTENT_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_CONTENT_MODE"
 
 
 def trace(record: dict[str, str | None]) -> None:
@@ -34,10 +36,9 @@ def option_value(option: str) -> str | None:
     return sys.argv[index + 1]
 
 
-def emit_search_response() -> None:
+def emit_search_response(source_url: str = "https://example.com/catalog-policy") -> None:
     """Emit the minimum valid stream-json search response and one evidence tool."""
     conversation_id = "catalog-policy"
-    source_url = "https://example.com/catalog-policy"
     structured_output = {
         "object": "search",
         "evidence_audit": {
@@ -103,6 +104,7 @@ def main() -> int:
             return 1
         if mode == "preferred":
             print(PREFERRED_MODEL)
+            print(RETRY_MODEL)
         print("fixture-model")
         return 0
     trace(
@@ -115,7 +117,17 @@ def main() -> int:
     configured_delay = os.environ.get(CONTENT_DELAY_ENVIRONMENT)
     if configured_delay is not None:
         time.sleep(float(configured_delay))
-    emit_search_response()
+    source_url = "https://example.com/catalog-policy"
+    content_mode = os.environ.get(CONTENT_MODE_ENVIRONMENT)
+    if content_mode in {"retry", "retry-twice"}:
+        with Path(os.environ[TRACE_ENVIRONMENT]).open(encoding="utf-8") as stream:
+            content_count = sum(
+                json.loads(line).get("kind") == "content" for line in stream
+            )
+        failed_attempts = 2 if content_mode == "retry-twice" else 1
+        if content_count <= failed_attempts:
+            source_url = "https://www.google.com/search?q=catalog+policy"
+    emit_search_response(source_url)
     return 0
 
 

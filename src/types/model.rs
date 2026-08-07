@@ -99,12 +99,14 @@ impl ModelCatalog {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreferredSearchModel {
     Gemini36FlashLow,
+    Gemini36FlashHigh,
 }
 
 impl PreferredSearchModel {
     const fn slug(self) -> &'static str {
         match self {
             Self::Gemini36FlashLow => "gemini-3.6-flash-low",
+            Self::Gemini36FlashHigh => "gemini-3.6-flash-high",
         }
     }
 }

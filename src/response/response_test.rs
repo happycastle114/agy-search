@@ -76,8 +76,10 @@ fn search_schema_requires_http_source_urls_before_deserialization() {
             .and_then(Value::as_str)
     });
 
-    // Then: empty or non-HTTP source strings cannot satisfy the generated schema.
-    assert_eq!(pattern, Some(r"^https?://[^\s]+$"));
+    // Then: unrestricted standard Search accepts only copied grounding transports at the model boundary.
+    assert!(pattern.is_some_and(|value| {
+        value.starts_with(r"^https://vertexaisearch\.cloud\.google\.com/grounding-api-redirect/")
+    }));
     assert_eq!(references, [Some("#/$defs/HttpUrl"); 2]);
 }
 

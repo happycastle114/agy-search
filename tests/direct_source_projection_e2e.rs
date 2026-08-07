@@ -93,6 +93,79 @@ fn replaces_a_direct_redirect_with_its_terminal_public_url()
 }
 
 #[test]
+fn restricted_direct_redirect_never_requests_an_out_of_scope_host()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, redirect_trace, invocation_trace) = command(&temporary)?;
+
+    command
+        .args([
+            "search",
+            "standard-direct-redirect",
+            "--source-url",
+            "https://example.com/redirecting",
+        ])
+        .assert()
+        .code(6);
+
+    let traced_urls = fs::read_to_string(&redirect_trace)?
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(traced_urls.len(), 3);
+    assert!(traced_urls.iter().all(|record| {
+        record.pointer("/url").and_then(Value::as_str) == Some("https://example.com/redirecting")
+    }));
+    assert_eq!(line_count(&invocation_trace)?, 3);
+    Ok(())
+}
+
+#[test]
+fn restricted_direct_source_never_requests_an_out_of_scope_initial_host()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, redirect_trace, invocation_trace) = command(&temporary)?;
+
+    command
+        .args([
+            "search",
+            "source-domain-lookalike",
+            "--domain",
+            "rust-lang.org",
+        ])
+        .assert()
+        .code(6);
+
+    assert!(!redirect_trace.exists());
+    assert_eq!(line_count(&invocation_trace)?, 3);
+    Ok(())
+}
+
+#[test]
+fn preserves_a_caller_restricted_news_portal_source() -> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, _redirect_trace, invocation_trace) = command(&temporary)?;
+
+    let assertion = command
+        .args([
+            "search",
+            "standard-news-portal-first",
+            "--source-url",
+            "https://v.daum.net/v/20260807120301584",
+        ])
+        .assert()
+        .success();
+    let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    assert_eq!(
+        response.pointer("/results/0/url"),
+        Some(&json!("https://v.daum.net/v/20260807120301584"))
+    );
+    assert_eq!(line_count(&invocation_trace)?, 1);
+    Ok(())
+}
+
+#[test]
 fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
 -> Result<(), Box<dyn std::error::Error>> {
     for query in [
@@ -101,6 +174,9 @@ fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
         "standard-direct-localhost-dot-first",
         "standard-direct-dead-first",
         "standard-regional-google-first",
+        "standard-news-portal-first",
+        "standard-site-root-first",
+        "standard-landing-page-first",
     ] {
         let temporary = tempfile::tempdir()?;
         let (mut command, _redirect_trace, invocation_trace) = command(&temporary)?;

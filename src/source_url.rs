@@ -61,6 +61,19 @@ impl HttpUrl {
         matches!((left, right), (Ok(left), Ok(right)) if left.origin() == right.origin())
     }
 
+    pub(crate) fn is_site_root(&self) -> bool {
+        Url::parse(self.as_str()).is_ok_and(|parsed| {
+            let path = parsed.path().trim_matches('/');
+            if path.is_empty() {
+                return true;
+            }
+            path.rsplit('/')
+                .next()
+                .and_then(|leaf| leaf.split('.').next())
+                .is_some_and(|stem| SiteLandingName::parse(stem).is_some())
+        })
+    }
+
     pub(crate) fn scheme(&self) -> Option<HttpScheme> {
         Url::parse(self.as_str())
             .ok()
@@ -69,21 +82,48 @@ impl HttpUrl {
 
     pub(crate) fn source_kind(&self) -> SourceUrlKind {
         Url::parse(self.as_str()).map_or(SourceUrlKind::Direct, |parsed| {
-            KnownGoogleHost::parse(parsed.host_str()).source_kind(parsed.path())
+            KnownSourceHost::parse(parsed.host_str()).source_kind(parsed.path())
+        })
+    }
+
+    pub(crate) fn is_news_portal(&self) -> bool {
+        Url::parse(self.as_str()).is_ok_and(|parsed| {
+            KnownSourceHost::parse(parsed.host_str()) == KnownSourceHost::NewsPortal
         })
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum KnownGoogleHost {
+enum KnownSourceHost {
     VertexAiSearch,
     GoogleSearch,
     GoogleNews,
     GoogleShortener,
+    NewsPortal,
     Other,
 }
 
-impl KnownGoogleHost {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SiteLandingName {
+    Default,
+    Home,
+    Index,
+    Main,
+}
+
+impl SiteLandingName {
+    fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "default" => Some(Self::Default),
+            "home" => Some(Self::Home),
+            "index" => Some(Self::Index),
+            "main" => Some(Self::Main),
+            _ => None,
+        }
+    }
+}
+
+impl KnownSourceHost {
     fn parse(host: Option<&str>) -> Self {
         const VERTEX_AI_SEARCH: &str = "vertexaisearch.cloud.google.com";
         const GOOGLE_SHORTENERS: [&str; 2] = ["g.co", "goo.gl"];
@@ -94,11 +134,23 @@ impl KnownGoogleHost {
             "googleusercontent",
             "gstatic",
         ];
+        const NEWS_PORTALS: [&str; 5] = [
+            "v.daum.net",
+            "news.daum.net",
+            "n.news.naver.com",
+            "news.naver.com",
+            "news.nate.com",
+        ];
 
         let Some(host) = host.map(|value| value.trim_end_matches('.')) else {
             return Self::Other;
         };
-        if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
+        if NEWS_PORTALS
+            .iter()
+            .any(|candidate| host.eq_ignore_ascii_case(candidate))
+        {
+            Self::NewsPortal
+        } else if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
             Self::VertexAiSearch
         } else if GOOGLE_SHORTENERS
             .iter()
@@ -144,10 +196,10 @@ impl KnownGoogleHost {
                 SourceUrlKind::GroundingRedirect
             }
             Self::GoogleShortener => SourceUrlKind::GroundingRedirect,
+            Self::NewsPortal | Self::Other => SourceUrlKind::Direct,
             Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews => {
                 SourceUrlKind::NonSource
             }
-            Self::Other => SourceUrlKind::Direct,
         }
     }
 }
@@ -171,38 +223,5 @@ impl<'de> Deserialize<'de> for HttpUrl {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use proptest::prelude::*;
-
-    #[test]
-    fn known_google_transport_and_wrapper_urls_are_never_direct() {
-        for value in [
-            "https://vertexaisearch.cloud.google.com./grounding-api-redirect/token",
-            "https://vertexaisearch.cloud.google.com/another-transport-path",
-            "https://www.google.com/url?q=https%3A%2F%2Fexample.com",
-            "https://google.com/url?url=https%3A%2F%2Fexample.com",
-            "https://news.google.com/articles/example",
-            "https://www.google.co.kr/search?q=korean+market",
-            "https://news.google.co.uk/articles/example",
-            "https://googleusercontent.com/cached-source",
-            "https://g.co/example",
-        ] {
-            let url = HttpUrl::parse(value).expect("Google transport URL must parse");
-            assert_ne!(url.source_kind(), SourceUrlKind::Direct, "URL: {value}");
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn parsed_http_urls_with_one_host_share_an_origin(
-            host in "[a-z]{1,12}",
-            left_path in "[a-z0-9/]{0,20}",
-            right_path in "[a-z0-9/]{0,20}",
-        ) {
-            let left = HttpUrl::parse(&format!("https://{host}.example/{left_path}"));
-            let right = HttpUrl::parse(&format!("https://{host}.example/{right_path}"));
-            prop_assert!(matches!((left, right), (Ok(left), Ok(right)) if left.same_origin(&right)));
-        }
-    }
-}
+#[path = "source_url/source_url_test.rs"]
+mod source_url_test;

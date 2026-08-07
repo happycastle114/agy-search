@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from enum import Enum
+from typing import assert_never
 
 from fake_agy_research_temporal import (
     JsonValue,
@@ -29,7 +30,7 @@ class ReadOnlyResearchQuery(str, Enum):
 
 
 def run_research(
-    payload: dict[str, object], arguments: list[str], emit: Emitter
+    payload: dict[str, JsonValue], arguments: list[str], emit: Emitter
 ) -> int:
     query = parse_query(payload)
     if query is ResearchQuery.TEMPORAL_SCHEMA:
@@ -79,9 +80,11 @@ def direct_read_url(raw_query: str) -> str | None:
     match query:
         case ReadOnlyResearchQuery.EXACT_URL | ReadOnlyResearchQuery.DOMAIN_ONLY:
             return "https://doc.rust-lang.org/book/"
+        case _:
+            assert_never(query)
 
 
-def restricted_query(payload: dict[str, object]) -> str | None:
+def restricted_query(payload: dict[str, JsonValue]) -> str | None:
     restriction = payload.get("source_restriction")
     if not isinstance(restriction, dict):
         return None
@@ -95,7 +98,11 @@ def restricted_query(payload: dict[str, object]) -> str | None:
 def restricted_response(raw_query: str) -> dict[str, JsonValue] | None:
     if not raw_query.startswith("source-research-"):
         return None
-    allowed = "https://doc.rust-lang.org/book/"
+    allowed = (
+        "https://v.daum.net/v/20260807120301584"
+        if raw_query == "source-research-news-portal"
+        else "https://doc.rust-lang.org/book/"
+    )
     disallowed = "https://contributor.example/rust-release"
     sources = [source("Allowed", allowed, "2026-08-03")]
     citations = [allowed]
@@ -124,7 +131,7 @@ def restricted_response(raw_query: str) -> dict[str, JsonValue] | None:
     }
 
 
-def parse_query(payload: dict[str, object]) -> ResearchQuery | None:
+def parse_query(payload: dict[str, JsonValue]) -> ResearchQuery | None:
     try:
         return ResearchQuery(str(payload["query"]))
     except ValueError:
@@ -155,7 +162,7 @@ def schema_has_one_exact_scope(arguments: list[str]) -> bool:
     )
 
 
-def policies_are_explicit(payload: dict[str, object]) -> bool:
+def policies_are_explicit(payload: dict[str, JsonValue]) -> bool:
     return (
         payload.get("scope_policy") == ScopePolicy.COMPLETE_REQUESTED_SCOPE.value
         and payload.get("date_policy") == DatePolicy.EXPLICIT_SOURCE_ONLY.value

@@ -13,6 +13,7 @@ use crate::{
     error::AgyError,
     events::{GroundingRequirement, GroundingResolved, ParsedRun, PendingGrounding},
     source_network::SafeSourceUrl,
+    source_restriction::SourceRestriction,
     types::{NonEmptyText, SourceUrlKind},
 };
 
@@ -51,16 +52,13 @@ pub(crate) async fn resolve_grounding_run(
     }
     let resolver = new_resolver(cwd)?;
     for transport in transports {
-        let direct = resolver.resolve_one(&transport).await?;
-        if let GroundingRequirement::Restricted {
-            transports: tool_transports,
-            restriction,
-        } = &run.grounding
-            && tool_transports.contains(&transport)
-            && !restriction.allows(&direct)
-        {
-            return Err(AgyError::OutputInvalid);
-        }
+        let direct = match &run.grounding {
+            GroundingRequirement::None => resolver.resolve_one(&transport).await?,
+            GroundingRequirement::Restricted {
+                transports: _,
+                restriction,
+            } => resolver.resolve_restricted(&transport, restriction).await?,
+        };
         run.response.replace_url(&transport, &direct);
     }
     Ok(run.mark_resolved())
@@ -92,8 +90,28 @@ impl RedirectResolver {
         &self,
         transport: &crate::types::HttpUrl,
     ) -> Result<crate::types::HttpUrl, AgyError> {
+        self.resolve(transport, RedirectScope::Unrestricted).await
+    }
+
+    pub(super) async fn resolve_restricted(
+        &self,
+        transport: &crate::types::HttpUrl,
+        restriction: &SourceRestriction,
+    ) -> Result<crate::types::HttpUrl, AgyError> {
+        self.resolve(transport, RedirectScope::Restricted(restriction))
+            .await
+    }
+
+    async fn resolve(
+        &self,
+        transport: &crate::types::HttpUrl,
+        scope: RedirectScope<'_>,
+    ) -> Result<crate::types::HttpUrl, AgyError> {
         let mut current = SafeSourceUrl::parse_redirect(transport.as_str())
             .map_err(|_| AgyError::OutputInvalid)?;
+        if !scope.allows_initial(transport) {
+            return Err(AgyError::OutputInvalid);
+        }
         let mut visited = HashSet::with_capacity(MAX_REDIRECT_HOPS + 1);
         for hop in 0..=MAX_REDIRECT_HOPS {
             if !visited.insert(current.as_str().to_owned()) {
@@ -104,6 +122,7 @@ impl RedirectResolver {
                 HttpStatus::Success => {
                     if response.location.is_some()
                         || current.source().source_kind() != SourceUrlKind::Direct
+                        || !scope.allows_terminal(current.source())
                     {
                         return Err(AgyError::OutputInvalid);
                     }
@@ -114,9 +133,13 @@ impl RedirectResolver {
                         return Err(AgyError::OutputInvalid);
                     }
                     let location = response.location.ok_or(AgyError::OutputInvalid)?;
-                    current = current
+                    let next = current
                         .join_redirect(&location)
                         .map_err(|_| AgyError::OutputInvalid)?;
+                    if !scope.allows_redirect(transport, next.source()) {
+                        return Err(AgyError::OutputInvalid);
+                    }
+                    current = next;
                 }
                 HttpStatus::Informational | HttpStatus::Other => {
                     return Err(AgyError::OutputInvalid);
@@ -124,5 +147,45 @@ impl RedirectResolver {
             }
         }
         Err(AgyError::OutputInvalid)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum RedirectScope<'a> {
+    Unrestricted,
+    Restricted(&'a SourceRestriction),
+}
+
+impl RedirectScope<'_> {
+    fn allows_initial(self, source: &crate::types::HttpUrl) -> bool {
+        match self {
+            Self::Unrestricted => true,
+            Self::Restricted(restriction) => {
+                source.source_kind() == SourceUrlKind::GroundingRedirect
+                    || restriction.allows(source)
+            }
+        }
+    }
+
+    fn allows_redirect(
+        self,
+        transport: &crate::types::HttpUrl,
+        target: &crate::types::HttpUrl,
+    ) -> bool {
+        match self {
+            Self::Unrestricted => true,
+            Self::Restricted(restriction) => {
+                restriction.allows(target)
+                    || transport.source_kind() == SourceUrlKind::GroundingRedirect
+                        && transport.same_origin(target)
+            }
+        }
+    }
+
+    fn allows_terminal(self, source: &crate::types::HttpUrl) -> bool {
+        match self {
+            Self::Unrestricted => true,
+            Self::Restricted(restriction) => restriction.allows(source),
+        }
     }
 }

@@ -70,6 +70,16 @@ fn validate_search_request(
         &response.results,
         &response.evidence_audit,
     )?;
+    validate_caller_owned_portals(
+        &request.source_restriction,
+        response.results.iter().map(|item| &item.url).chain(
+            response
+                .evidence_audit
+                .candidates
+                .iter()
+                .map(|item| &item.url),
+        ),
+    )?;
     validate_source_restriction(
         &request.source_restriction,
         response.results.iter().map(|item| &item.url).chain(
@@ -108,6 +118,21 @@ fn validate_research_request(
         request.verification,
         &response.sources,
         &response.evidence_audit,
+    )?;
+    validate_caller_owned_portals(
+        &request.source_restriction,
+        response
+            .sources
+            .iter()
+            .map(|item| &item.url)
+            .chain(response.findings.iter().flat_map(|item| &item.citations))
+            .chain(
+                response
+                    .evidence_audit
+                    .candidates
+                    .iter()
+                    .map(|item| &item.url),
+            ),
     )?;
     validate_source_restriction(
         &request.source_restriction,
@@ -180,6 +205,17 @@ fn validate_source_restriction<'a>(
         Ok(())
     } else {
         Err(AgyError::OutputInvalid)
+    }
+}
+
+fn validate_caller_owned_portals<'a>(
+    restriction: &SourceRestriction,
+    mut urls: impl Iterator<Item = &'a HttpUrl>,
+) -> Result<(), AgyError> {
+    if restriction.is_unrestricted() && urls.any(HttpUrl::is_news_portal) {
+        Err(AgyError::OutputInvalid)
+    } else {
+        Ok(())
     }
 }
 
