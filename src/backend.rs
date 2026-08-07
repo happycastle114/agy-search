@@ -24,16 +24,21 @@ const MAX_ADVISORY_CATALOG_DISCOVERY: Duration = Duration::from_secs(5);
 
 struct ContentModels {
     primary: Option<ModelSlug>,
-    retry: Option<ModelSlug>,
-    final_retry: Option<ModelSlug>,
+    recoveries: [RecoveryModel; 2],
+}
+
+#[derive(Clone)]
+enum RecoveryModel {
+    Inherit,
+    Selected(ModelSlug),
+    Disabled,
 }
 
 impl ContentModels {
-    fn fixed(model: Option<ModelSlug>) -> Self {
+    const fn fixed(model: Option<ModelSlug>) -> Self {
         Self {
-            final_retry: model.clone(),
-            retry: model.clone(),
             primary: model,
+            recoveries: [RecoveryModel::Inherit, RecoveryModel::Inherit],
         }
     }
 }
@@ -139,23 +144,24 @@ async fn select_preferred_search_models(
     match discover_models(executable, cwd.to_path_buf(), timeout).await {
         Ok(catalog) => {
             let primary = catalog.preferred(preferred);
-            let retry = primary
-                .as_ref()
-                .and_then(|_| catalog.preferred(PreferredSearchModel::Medium))
-                .or_else(|| {
-                    primary
-                        .as_ref()
-                        .and_then(|_| catalog.preferred(PreferredSearchModel::High))
-                })
-                .or_else(|| primary.clone());
-            let final_retry = primary
-                .as_ref()
-                .and_then(|_| catalog.preferred(PreferredSearchModel::High))
-                .or_else(|| retry.clone());
+            let Some(_) = primary else {
+                return Ok(ContentModels::fixed(None));
+            };
+            let medium = catalog.preferred(PreferredSearchModel::Medium);
+            let high = catalog.preferred(PreferredSearchModel::High);
+            let recoveries = match (medium, high) {
+                (Some(medium), Some(high)) => [
+                    RecoveryModel::Selected(medium),
+                    RecoveryModel::Selected(high),
+                ],
+                (Some(model), None) | (None, Some(model)) => {
+                    [RecoveryModel::Selected(model), RecoveryModel::Disabled]
+                }
+                (None, None) => [RecoveryModel::Disabled, RecoveryModel::Disabled],
+            };
             Ok(ContentModels {
                 primary,
-                retry,
-                final_retry,
+                recoveries,
             })
         }
         Err(_) if deadline.remaining().is_ok() => Ok(ContentModels::fixed(None)),

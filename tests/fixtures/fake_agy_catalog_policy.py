@@ -38,8 +38,9 @@ def option_value(option: str) -> str | None:
 
 
 def emit_search_response(source_url: str = "https://example.com/catalog-policy") -> None:
-    """Emit the minimum valid stream-json search response and one evidence tool."""
+    """Emit a schema-valid diversified search response and one evidence tool."""
     conversation_id = "catalog-policy"
+    second_url = source_url + "&candidate=2" if "?" in source_url else source_url + "?candidate=2"
     structured_output = {
         "object": "search",
         "evidence_audit": {
@@ -49,7 +50,13 @@ def emit_search_response(source_url: str = "https://example.com/catalog-policy")
                     "claim": "catalog policy fixture",
                     "url": source_url,
                     "date": None,
-                }
+                },
+                {
+                    "scope": "catalog policy alternate",
+                    "claim": "catalog policy fixture alternate",
+                    "url": second_url,
+                    "date": None,
+                },
             ],
             "coverage_complete": True,
             "conclusion": "catalog policy fixture",
@@ -61,7 +68,14 @@ def emit_search_response(source_url: str = "https://example.com/catalog-policy")
                 "snippet": "catalog policy fixture",
                 "date": None,
                 "last_updated": None,
-            }
+            },
+            {
+                "title": "Catalog policy alternate",
+                "url": second_url,
+                "snippet": "catalog policy fixture alternate",
+                "date": None,
+                "last_updated": None,
+            },
         ],
     }
     events = [
@@ -103,9 +117,11 @@ def main() -> int:
         mode = os.environ.get(CATALOG_MODE_ENVIRONMENT, "preferred")
         if mode == "failed":
             return 1
-        if mode == "preferred":
+        if mode in {"preferred", "without-medium"}:
             print(PREFERRED_MODEL)
+        if mode == "preferred":
             print(FIRST_RETRY_MODEL)
+        if mode in {"preferred", "without-medium"}:
             print(FINAL_RETRY_MODEL)
         print("fixture-model")
         return 0

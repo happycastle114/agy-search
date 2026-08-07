@@ -24,8 +24,12 @@ fn falls_back_to_a_bounded_get_when_a_publisher_rejects_head()
     let get = records.last().and_then(|record| record["argv"].as_array());
     assert!(get.is_some_and(|argv| {
         !argv.contains(&json!("--head"))
-            && argv.contains(&json!("--range"))
-            && argv.contains(&json!("--max-filesize"))
+            && argv
+                .windows(2)
+                .any(|pair| pair == [json!("--range"), json!("0-0")])
+            && argv
+                .windows(2)
+                .any(|pair| pair == [json!("--max-filesize"), json!("2097152")])
             && argv.iter().any(|value| value == "--resolve")
             && argv.windows(2).any(|pair| {
                 pair.first() == Some(&json!("--connect-timeout"))

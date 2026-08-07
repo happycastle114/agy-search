@@ -40,14 +40,12 @@ pub(super) async fn execute(
 ) -> Result<ResponseDocument, AgyError> {
     let ContentModels {
         primary,
-        retry,
-        final_retry,
+        recoveries,
     } = models;
     let context = ExecutionContext {
         executable: executable.to_owned(),
         model: primary,
-        retry_model: retry,
-        final_retry_model: final_retry,
+        recoveries,
         effort,
         deadline,
     };

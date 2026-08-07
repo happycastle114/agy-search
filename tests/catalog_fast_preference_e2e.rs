@@ -111,6 +111,31 @@ fn standard_low_search_keeps_the_final_bounded_attempt_on_the_quality_model()
 }
 
 #[test]
+fn standard_low_search_skips_a_duplicate_final_retry_when_medium_is_absent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let trace = temporary.path().join("invocations.jsonl");
+
+    command(&trace)
+        .env("AGY_SEARCH_CATALOG_MODE", "without-medium")
+        .env("AGY_SEARCH_CATALOG_CONTENT_MODE", "retry-twice")
+        .args(["search", "partial catalog"])
+        .assert()
+        .code(6);
+
+    assert_eq!(
+        trace_records(&trace)?,
+        vec![
+            serde_json::json!({"kind":"version","model":null,"effort":null}),
+            serde_json::json!({"kind":"models","model":null,"effort":null}),
+            serde_json::json!({"kind":"content","model":PREFERRED_MODEL,"effort":"low"}),
+            serde_json::json!({"kind":"content","model":FINAL_RETRY_MODEL,"effort":"high"}),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn standard_low_search_falls_back_to_the_provider_default_after_advisory_catalog_failure()
 -> Result<(), Box<dyn std::error::Error>> {
     for mode in ["absent", "failed"] {

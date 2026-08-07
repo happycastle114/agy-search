@@ -8,7 +8,8 @@ use crate::{
 };
 
 use super::execution::{
-    ContentExecution, ExecutionContext, StandardSearchRun, run_standard_search_unvalidated_once,
+    ContentExecution, ExecutionContext, RecoveryStage, StandardSearchRun,
+    run_standard_search_unvalidated_once,
 };
 
 pub(super) async fn run_standard_search(
@@ -34,7 +35,9 @@ pub(super) async fn run_standard_search(
     match first {
         StandardSearchRun::Response(response) => Ok(response),
         StandardSearchRun::NoReachableResults | StandardSearchRun::RecoverableUnlistedTool => {
-            let retry_context = context.for_standard_retry();
+            let Some(retry_context) = context.for_standard_retry(RecoveryStage::First) else {
+                return Err(AgyError::OutputInvalid);
+            };
             let second = validate_standard_run(
                 run_standard_search_unvalidated_once(
                     &retry_context,
@@ -51,7 +54,11 @@ pub(super) async fn run_standard_search(
                 StandardSearchRun::Response(response) => Ok(response),
                 StandardSearchRun::NoReachableResults
                 | StandardSearchRun::RecoverableUnlistedTool => {
-                    let final_retry_context = context.for_standard_final_retry();
+                    let Some(final_retry_context) =
+                        context.for_standard_retry(RecoveryStage::Final)
+                    else {
+                        return Err(AgyError::OutputInvalid);
+                    };
                     let third = validate_standard_run(
                         run_standard_search_unvalidated_once(
                             &final_retry_context,
