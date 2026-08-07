@@ -205,8 +205,8 @@ def main() -> int:
         print("9.9.9")
         return 0
     if sys.argv[1:] == ["models"]:
-        print("fixture-model")
-        print("fixture-model-high")
+        print("fixture-model\tFixture Model")
+        print("fixture-model-high\tFixture Model (High)")
         return 0
     return run_operation()
 

@@ -77,6 +77,25 @@ fn model_slug_parses_only_a_closed_effort_suffix() {
 }
 
 #[test]
+fn model_catalog_accepts_legacy_and_labeled_records() {
+    // Given: Antigravity 1.1.10 slug lines and 1.1.11 labeled records.
+    let cases = [
+        b"fixture-model\nfixture-model-high\n".as_slice(),
+        b"fixture-model\tFixture Model\nfixture-model-high\tFixture Model (High)\n".as_slice(),
+    ];
+
+    // When/Then: both contracts resolve to the same typed catalog.
+    for output in cases {
+        assert_eq!(
+            ModelCatalog::parse(output)
+                .expect("supported model records must parse")
+                .into_strings(),
+            ["fixture-model", "fixture-model-high"]
+        );
+    }
+}
+
+#[test]
 fn policy_spellings_and_maxima_remain_closed() {
     assert_eq!(
         serde_json::to_value(VerificationMode::TemporalComparison)
