@@ -93,6 +93,30 @@ fn replaces_a_direct_redirect_with_its_terminal_public_url()
 }
 
 #[test]
+fn preserves_a_caller_restricted_news_portal_source() -> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, _redirect_trace, invocation_trace) = command(&temporary)?;
+
+    let assertion = command
+        .args([
+            "search",
+            "standard-news-portal-first",
+            "--source-url",
+            "https://v.daum.net/v/20260807120301584",
+        ])
+        .assert()
+        .success();
+    let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    assert_eq!(
+        response.pointer("/results/0/url"),
+        Some(&json!("https://v.daum.net/v/20260807120301584"))
+    );
+    assert_eq!(line_count(&invocation_trace)?, 1);
+    Ok(())
+}
+
+#[test]
 fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
 -> Result<(), Box<dyn std::error::Error>> {
     for query in [

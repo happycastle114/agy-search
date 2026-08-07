@@ -83,6 +83,14 @@ pub(crate) async fn resolve_standard_search_run(
         run.response.remove_search_url(&non_source)?;
     }
     if reject_site_roots {
+        for news_portal in run
+            .response
+            .direct_search_urls()?
+            .into_iter()
+            .filter(HttpUrl::is_news_portal)
+        {
+            run.response.remove_search_url(&news_portal)?;
+        }
         for site_root in run
             .response
             .direct_search_urls()?

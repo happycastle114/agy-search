@@ -236,7 +236,9 @@ identifiers, or tool payloads.
 - Launches `agy` with direct argv, never a shell.
 - Uses `stream-json` and a generated JSON Schema without forcing plan mode.
 - Disables print-mode slash/skill expansion so request fields remain data.
-- Defaults to low effort and limits ordinary search to two live search calls.
+- Defaults standard search to low effort: one primary attempt followed, only if
+  no publishable result survives, by at most two bounded recovery attempts on
+  the quality retry model. All attempts share the original invocation deadline.
 - Sends typed primary-first, complete-scope, and explicit-source-date policies.
 - Requires an internal evidence audit, validates public URLs against it, and
   removes the audit from the stable public JSON response. Typed temporal
@@ -257,9 +259,10 @@ identifiers, or tool payloads.
   curl arguments: HTTPS-only protocols, five redirects, bounded
   connect/request time, no response body, and one DNS-pinned terminal target.
   Google search, transport, and cache origins are never public sources. A
-  failed or unsafe row is removed with its audit row; the existing single retry
-  is used only when no publishable result survives. Each redirect hop is parsed,
-  public-address validated, and pinned before the next request.
+  failed or unsafe row is removed with its audit row; if no publishable result
+  survives, standard search may use up to two bounded recovery attempts on the
+  quality retry model. Each redirect hop is parsed, public-address validated,
+  and pinned before the next request.
 - Counts every attempted built-in `search_web` or `read_url_content` lifecycle
   toward the budget and requires all started calls to complete successfully.
 - Rejects generic MCP calls and merely started tools as provenance.
