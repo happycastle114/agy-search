@@ -13,6 +13,9 @@ const PREFERRED_MODEL: &str = "gemini-3.6-flash-low";
 const FIRST_RETRY_MODEL: &str = "gemini-3.6-flash-medium";
 const FINAL_RETRY_MODEL: &str = "gemini-3.6-flash-high";
 
+#[path = "catalog_fast_preference_e2e/recovery_schedule_cases.rs"]
+mod recovery_schedule_cases;
+
 fn fixture_agy() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy_catalog_policy.py")
 }
@@ -104,31 +107,6 @@ fn standard_low_search_keeps_the_final_bounded_attempt_on_the_quality_model()
             serde_json::json!({"kind":"models","model":null,"effort":null}),
             serde_json::json!({"kind":"content","model":PREFERRED_MODEL,"effort":"low"}),
             serde_json::json!({"kind":"content","model":FIRST_RETRY_MODEL,"effort":"medium"}),
-            serde_json::json!({"kind":"content","model":FINAL_RETRY_MODEL,"effort":"high"}),
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn standard_low_search_skips_a_duplicate_final_retry_when_medium_is_absent()
--> Result<(), Box<dyn std::error::Error>> {
-    let temporary = TempDir::new()?;
-    let trace = temporary.path().join("invocations.jsonl");
-
-    command(&trace)
-        .env("AGY_SEARCH_CATALOG_MODE", "without-medium")
-        .env("AGY_SEARCH_CATALOG_CONTENT_MODE", "retry-twice")
-        .args(["search", "partial catalog"])
-        .assert()
-        .code(6);
-
-    assert_eq!(
-        trace_records(&trace)?,
-        vec![
-            serde_json::json!({"kind":"version","model":null,"effort":null}),
-            serde_json::json!({"kind":"models","model":null,"effort":null}),
-            serde_json::json!({"kind":"content","model":PREFERRED_MODEL,"effort":"low"}),
             serde_json::json!({"kind":"content","model":FINAL_RETRY_MODEL,"effort":"high"}),
         ]
     );

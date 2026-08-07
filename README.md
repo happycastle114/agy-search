@@ -135,8 +135,8 @@ absent or the advisory query fails while time remains, content omits `--model`
 and uses the provider default. Temporal Search, Research, Extract, Map, Crawl,
 and medium/high effort Search do not make that preference query. The
 same catalog may supply `gemini-3.6-flash-medium` for the first bounded recovery
-and `gemini-3.6-flash-high` for the final recovery. Missing tiers fall back
-without adding an attempt, and every attempt shares the original deadline. The
+and `gemini-3.6-flash-high` for the final recovery. Unavailable recovery tiers
+are skipped and never duplicated, and every attempt shares the original deadline. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
 non-default curl executable for the bounded source-link resolver and temporal
