@@ -22,6 +22,20 @@ mod catalog_policy_test;
 
 const MAX_ADVISORY_CATALOG_DISCOVERY: Duration = Duration::from_secs(5);
 
+struct ContentModels {
+    primary: Option<ModelSlug>,
+    retry: Option<ModelSlug>,
+}
+
+impl ContentModels {
+    fn fixed(model: Option<ModelSlug>) -> Self {
+        Self {
+            retry: model.clone(),
+            primary: model,
+        }
+    }
+}
+
 pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, AgyError> {
     let Invocation {
         agy_path,
@@ -41,17 +55,25 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
             .map(ResponseDocument::models),
         InvocationCommand::Content(request) => {
             antigravity_version::require_supported(&agy_path, cwd.clone(), deadline).await?;
-            let selected_model = match model {
+            let selected_models = match model {
                 Some(selected) => {
                     validate_model(&agy_path, &cwd, deadline, &selected).await?;
-                    Some(selected)
+                    ContentModels::fixed(Some(selected))
                 }
                 None => {
-                    select_preferred_search_model(&agy_path, &cwd, deadline, &request, effort)
+                    select_preferred_search_models(&agy_path, &cwd, deadline, &request, effort)
                         .await?
                 }
             };
-            content::execute(&agy_path, selected_model, effort, deadline, *request).await
+            content::execute(
+                &agy_path,
+                selected_models.primary,
+                selected_models.retry,
+                effort,
+                deadline,
+                *request,
+            )
+            .await
         }
     }
 }
@@ -107,22 +129,31 @@ async fn validate_model(
     }
 }
 
-async fn select_preferred_search_model(
+async fn select_preferred_search_models(
     executable: &str,
     cwd: &Path,
     deadline: Deadline,
     request: &crate::request::ContentRequest,
     effort: Option<Effort>,
-) -> Result<Option<ModelSlug>, AgyError> {
+) -> Result<ContentModels, AgyError> {
     let Some(preferred) =
         preferred_search_model(request.operation(), request.verification(), effort)
     else {
-        return Ok(None);
+        return Ok(ContentModels::fixed(None));
     };
     let timeout = deadline.remaining()?.min(MAX_ADVISORY_CATALOG_DISCOVERY);
     match discover_models(executable, cwd.to_path_buf(), timeout).await {
-        Ok(catalog) => Ok(catalog.preferred(preferred)),
-        Err(_) if deadline.remaining().is_ok() => Ok(None),
+        Ok(catalog) => {
+            let primary = catalog.preferred(preferred);
+            let retry = primary
+                .as_ref()
+                .and_then(|_| catalog.preferred(PreferredSearchModel::Gemini36FlashHigh));
+            Ok(ContentModels {
+                retry: retry.or_else(|| primary.clone()),
+                primary,
+            })
+        }
+        Err(_) if deadline.remaining().is_ok() => Ok(ContentModels::fixed(None)),
         Err(_) => Err(AgyError::Timeout),
     }
 }

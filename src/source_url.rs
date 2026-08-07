@@ -61,6 +61,18 @@ impl HttpUrl {
         matches!((left, right), (Ok(left), Ok(right)) if left.origin() == right.origin())
     }
 
+    pub(crate) fn is_site_root(&self) -> bool {
+        Url::parse(self.as_str()).is_ok_and(|parsed| {
+            let path = parsed.path().trim_matches('/');
+            if path.is_empty() {
+                return true;
+            }
+            let leaf = path.rsplit('/').next().unwrap_or(path);
+            let stem = leaf.split('.').next().unwrap_or(leaf);
+            SiteLandingName::parse(stem).is_some()
+        })
+    }
+
     pub(crate) fn scheme(&self) -> Option<HttpScheme> {
         Url::parse(self.as_str())
             .ok()
@@ -69,21 +81,42 @@ impl HttpUrl {
 
     pub(crate) fn source_kind(&self) -> SourceUrlKind {
         Url::parse(self.as_str()).map_or(SourceUrlKind::Direct, |parsed| {
-            KnownGoogleHost::parse(parsed.host_str()).source_kind(parsed.path())
+            KnownSourceHost::parse(parsed.host_str()).source_kind(parsed.path())
         })
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum KnownGoogleHost {
+enum KnownSourceHost {
     VertexAiSearch,
     GoogleSearch,
     GoogleNews,
     GoogleShortener,
+    NewsPortal,
     Other,
 }
 
-impl KnownGoogleHost {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SiteLandingName {
+    Default,
+    Home,
+    Index,
+    Main,
+}
+
+impl SiteLandingName {
+    fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "default" => Some(Self::Default),
+            "home" => Some(Self::Home),
+            "index" => Some(Self::Index),
+            "main" => Some(Self::Main),
+            _ => None,
+        }
+    }
+}
+
+impl KnownSourceHost {
     fn parse(host: Option<&str>) -> Self {
         const VERTEX_AI_SEARCH: &str = "vertexaisearch.cloud.google.com";
         const GOOGLE_SHORTENERS: [&str; 2] = ["g.co", "goo.gl"];
@@ -94,11 +127,23 @@ impl KnownGoogleHost {
             "googleusercontent",
             "gstatic",
         ];
+        const NEWS_PORTALS: [&str; 5] = [
+            "v.daum.net",
+            "news.daum.net",
+            "n.news.naver.com",
+            "news.naver.com",
+            "news.nate.com",
+        ];
 
         let Some(host) = host.map(|value| value.trim_end_matches('.')) else {
             return Self::Other;
         };
-        if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
+        if NEWS_PORTALS
+            .iter()
+            .any(|candidate| host.eq_ignore_ascii_case(candidate))
+        {
+            Self::NewsPortal
+        } else if host.eq_ignore_ascii_case(VERTEX_AI_SEARCH) {
             Self::VertexAiSearch
         } else if GOOGLE_SHORTENERS
             .iter()
@@ -144,6 +189,7 @@ impl KnownGoogleHost {
                 SourceUrlKind::GroundingRedirect
             }
             Self::GoogleShortener => SourceUrlKind::GroundingRedirect,
+            Self::NewsPortal => SourceUrlKind::NonSource,
             Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews => {
                 SourceUrlKind::NonSource
             }
@@ -191,6 +237,36 @@ mod tests {
             let url = HttpUrl::parse(value).expect("Google transport URL must parse");
             assert_ne!(url.source_kind(), SourceUrlKind::Direct, "URL: {value}");
         }
+    }
+
+    #[test]
+    fn known_news_portal_syndication_urls_are_never_direct_sources() {
+        for value in [
+            "https://v.daum.net/v/20260807120301584",
+            "https://news.daum.net/example",
+            "https://n.news.naver.com/article/001/0010000000",
+            "https://news.naver.com/example",
+            "https://news.nate.com/view/20260807n00001",
+        ] {
+            let url = HttpUrl::parse(value).expect("news portal URL must parse");
+            assert_eq!(url.source_kind(), SourceUrlKind::NonSource, "URL: {value}");
+        }
+    }
+
+    #[test]
+    fn generic_site_landing_paths_are_not_search_evidence_pages() {
+        for value in [
+            "https://example.com/",
+            "https://example.com/main/main.jsp",
+            "https://example.com/report/index.html",
+            "https://example.com/home.php?locale=ko",
+        ] {
+            let url = HttpUrl::parse(value).expect("site landing URL must parse");
+            assert!(url.is_site_root(), "URL: {value}");
+        }
+        let article = HttpUrl::parse("https://example.com/news/article.html?id=7")
+            .expect("article URL must parse");
+        assert!(!article.is_site_root());
     }
 
     proptest! {

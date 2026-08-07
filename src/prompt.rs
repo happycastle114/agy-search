@@ -24,6 +24,10 @@ pub(crate) fn build_standard_search_retry_prompt(request_json: &str) -> String {
     render_prompt(PromptKind::StandardSearchRetry, request_json)
 }
 
+pub(crate) fn build_standard_search_final_retry_prompt(request_json: &str) -> String {
+    render_prompt(PromptKind::StandardSearchFinalRetry, request_json)
+}
+
 #[derive(Clone, Copy)]
 enum PromptKind {
     Content {
@@ -31,60 +35,12 @@ enum PromptKind {
         verification: VerificationMode,
     },
     StandardSearchRetry,
+    StandardSearchFinalRetry,
     TemporalScope,
 }
 
 fn render_prompt(kind: PromptKind, request_json: &str) -> String {
-    let (operation, tools, scope, verification, artifact_access) = match kind {
-        PromptKind::Content {
-            operation,
-            verification,
-        } => (
-            operation,
-            tool_instruction(operation, verification),
-            "For search, keep INPUT_JSON.query byte-for-byte as the first query prefix. Append the \
-             exact ordered site:DOMAIN tokens from INPUT_JSON.source_restriction.domains and explicit country context from INPUT_JSON. \
-             When that domains list is empty, do not invent a site: token from an exact URL member. \
-             Never shorten a scoped request to a generic discovery query. Honor \
-            complete_requested_scope and populate evidence_audit before public results. Include at \
-            least one candidate and one candidate per requested scope.",
-            verification_instruction(operation, verification),
-            "You may inspect only the content artifact created by read_url_content. Inspect each \
-             fetched artifact at most once with one view or one grep; never inspect the same \
-             artifact again and never use both view and grep on it.",
-        ),
-        PromptKind::StandardSearchRetry => (
-            Operation::Search,
-            "This is the only retry. Use exactly one search_web call, preserve the required \
-             INPUT_JSON.query prefix and scoped source tokens, and do not use any other tool. \
-             Return only sources whose completed result supplies an exact URL and enough evidence \
-             for the wire contract.",
-            "Populate evidence_audit before public results. Emit a public result only after adding \
-             a candidate with the exact same URL. Keep the retry to the smallest fully audited \
-             result set instead of returning an unaudited source.",
-            "For every non-null public date, require a same-URL candidate with the same normalized \
-             date, exact source_date_text, and a contiguous evidence_excerpt containing that exact \
-             source_date_text. Set the public date to null when that complete binding is absent.",
-            "Do not inspect content artifacts.",
-        ),
-        PromptKind::TemporalScope => (
-            Operation::Search,
-            "Use only search_web. Its first query must equal INPUT_JSON.required_search_query \
-             byte-for-byte. A later search_web query must retain that exact byte-for-byte prefix \
-             and may append exactly one whitespace-free version or value token from the completed \
-             first result. Never append a date, URL, source token, snippet, or multiple tokens. \
-             Never use read_url_content or any other tool. Use at most two searches.",
-            "Preserve the original query's entity, cutoff, source_restriction, country, and source constraints, \
-             but focus the search only on the exact INPUT_JSON.scope label. Populate \
-             evidence_audit with exactly one candidate for that scope.",
-            "Return exactly one audit candidate and one public result for INPUT_JSON.scope. Require \
-             value, normalized YYYY-MM-DD date, exact source_date_text, and a contiguous \
-             evidence_excerpt containing both value and source_date_text. Set coverage_complete=true \
-             only when that one scope is fully bound, and copy its exact URL, value, and date into \
-             the public result.",
-            "Do not inspect content artifacts.",
-        ),
-    };
+    let (operation, tools, scope, verification, artifact_access) = prompt_parts(kind);
     let wire = wire_instruction(operation);
     format!(
         "Perform the {operation} operation with live web tools. {tools} {wire} \
@@ -121,21 +77,121 @@ fn render_prompt(kind: PromptKind, request_json: &str) -> String {
          version, value, or date, must appear in the public title or snippet and its audit claim; a \
          generic phrase such as release update does not satisfy an exact-field request. \
          Copy every URL exactly from a completed tool result, including a Google grounding transport \
-         URL; the wrapper resolves that transport URL to its direct HTTPS target. Never construct, \
+         URL; the wrapper resolves that transport URL to its direct HTTPS target. A Google host \
+         whose path is /search is a search-result page, not a grounding transport, and must never \
+         be audited or returned. For unrestricted Search, a bare site root is not an evidence \
+         page and must never be audited or returned. Never construct, \
          shorten, normalize, or guess a source URL. Public URLs must be unique. Multiple audit \
          candidates may share one URL when one canonical page proves several scopes. {verification}\
          \nINPUT_JSON={request_json}"
     )
 }
 
+type PromptParts = (
+    Operation,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+);
+
+const fn prompt_parts(kind: PromptKind) -> PromptParts {
+    match kind {
+        PromptKind::Content {
+            operation,
+            verification,
+        } => (
+            operation,
+            tool_instruction(operation, verification),
+            "For search, keep INPUT_JSON.query byte-for-byte as the first query prefix. Append the \
+             exact ordered site:DOMAIN tokens from INPUT_JSON.source_restriction.domains and explicit country context from INPUT_JSON. \
+             When that domains list is empty, do not invent a site: token from an exact URL member. \
+             Never shorten a scoped request to a generic discovery query. Honor \
+            complete_requested_scope and populate evidence_audit before public results. Include at \
+            least one candidate and one candidate per requested scope.",
+            verification_instruction(operation, verification),
+            "You may inspect only the content artifact created by read_url_content. Inspect each \
+             fetched artifact at most once with one view or one grep; never inspect the same \
+             artifact again and never use both view and grep on it.",
+        ),
+        PromptKind::StandardSearchRetry => (
+            Operation::Search,
+            "This is the first bounded recovery attempt. Use exactly one search_web call and do \
+             not use any other tool. Start its query with INPUT_JSON.query byte-for-byte and retain the exact scoped \
+             source tokens. For an unrestricted search, append a short query-language phrase \
+             meaning original evidence article (for Korean use exactly ` 원문 기사`; for English \
+             use exactly ` original source article`), followed by the exact suffix \
+             ` -site:google.com -site:google.co.kr -site:v.daum.net -site:n.news.naver.com \
+             -site:news.nate.com`; a restricted search must keep its caller-owned \
+             site expression instead. A google.com/search URL is a search-result page, never a \
+             grounding transport or public source. For unrestricted input, set every URL field to \
+             an exact vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the \
+             completed tool result, never to a publisher URL; the wrapper resolves it. Return only sources whose completed result \
+             supplies an exact terminal publisher URL and enough evidence for the wire contract.",
+            "Populate evidence_audit before public results. Emit a public result only after adding \
+             a candidate with the exact same URL. Keep the retry to the smallest fully audited \
+             result set instead of returning an unaudited source.",
+            "For every non-null public date, require a same-URL candidate with the same normalized \
+             date, exact source_date_text, and a contiguous evidence_excerpt containing that exact \
+             source_date_text. Set the public date to null when that complete binding is absent.",
+            "Do not inspect content artifacts.",
+        ),
+        PromptKind::StandardSearchFinalRetry => (
+            Operation::Search,
+            "This is the final bounded recovery attempt. Use exactly one search_web call and do \
+             not use any other tool. Start its query with INPUT_JSON.query byte-for-byte and \
+             retain the exact scoped source tokens. For an unrestricted search, append a short \
+             query-language phrase for a current original evidence article (for Korean use \
+             exactly ` 원문 기사 실시간 시황`; for English use exactly \
+             ` original source article latest report`), followed by \
+             ` -site:google.com -site:google.co.kr -site:v.daum.net -site:n.news.naver.com \
+             -site:news.nate.com`. A restricted search must keep its caller-owned site expression \
+             instead. Never return a search-result page, news portal, bare site root, guessed URL, \
+             or unreachable URL. For unrestricted input, set every URL field to an exact \
+             vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the completed \
+             tool result, never to a publisher URL; the wrapper resolves it. Return only a deep \
+             terminal publisher evidence page supplied by the completed search result.",
+            "Populate evidence_audit before public results. Emit the smallest fully audited \
+             result set, and require every public URL to equal one audit candidate URL.",
+            "For every non-null public date, require a same-URL candidate with the same normalized \
+             date, exact source_date_text, and a contiguous evidence_excerpt containing that exact \
+             source_date_text. Set the public date to null when that complete binding is absent.",
+            "Do not inspect content artifacts.",
+        ),
+        PromptKind::TemporalScope => (
+            Operation::Search,
+            "Use only search_web. Its first query must equal INPUT_JSON.required_search_query \
+             byte-for-byte. A later search_web query must retain that exact byte-for-byte prefix \
+             and may append exactly one whitespace-free version or value token from the completed \
+             first result. Never append a date, URL, source token, snippet, or multiple tokens. \
+             Never use read_url_content or any other tool. Use at most two searches.",
+            "Preserve the original query's entity, cutoff, source_restriction, country, and source constraints, \
+             but focus the search only on the exact INPUT_JSON.scope label. Populate \
+             evidence_audit with exactly one candidate for that scope.",
+            "Return exactly one audit candidate and one public result for INPUT_JSON.scope. Require \
+             value, normalized YYYY-MM-DD date, exact source_date_text, and a contiguous \
+             evidence_excerpt containing both value and source_date_text. Set coverage_complete=true \
+             only when that one scope is fully bound, and copy its exact URL, value, and date into \
+             the public result.",
+            "Do not inspect content artifacts.",
+        ),
+    }
+}
+
 const fn tool_instruction(operation: Operation, verification: VerificationMode) -> &'static str {
     match (operation, verification) {
         (Operation::Search, VerificationMode::Standard) => {
-            "Begin immediately with search_web; perform no preparatory tool discovery. Return \
-             after one call when its direct-publisher or primary-source snippets prove the \
-             whole answer. Use at most one additional call: search_web to replace a news-portal or \
-             syndication URL with its direct publisher evidence page or locate a missing canonical \
-             page, or read_url_content when the known page lacks an exact requested field."
+            "Begin immediately with search_web; perform no preparatory tool discovery. Use exactly \
+             one search_web call and do not use any other tool. Start its query with \
+             INPUT_JSON.query byte-for-byte. For an unrestricted search, append a short \
+             query-language phrase meaning original evidence article (for Korean use exactly \
+             ` 원문 기사`; for English use exactly ` original source article`), followed by \
+             ` -site:google.com -site:google.co.kr -site:v.daum.net -site:n.news.naver.com \
+             -site:news.nate.com`. A restricted search must keep its caller-owned site expression \
+             instead. For unrestricted input, set every URL field to an exact \
+             vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the completed \
+             tool result, never to a publisher URL; the wrapper resolves it. Return after that call when its direct-publisher or primary-source snippets \
+             prove the answer."
         }
         (Operation::Search, VerificationMode::TemporalComparison) => {
             "Use this bounded sequence: (1) search_web with the exact scoped query; (2) when \
@@ -262,9 +318,10 @@ mod tests {
                 "Begin immediately with search_web; perform no preparatory tool discovery."
             )
         );
-        assert!(prompt.contains(
-            "replace a news-portal or syndication URL with its direct publisher evidence page"
-        ));
+        assert!(prompt.contains("Use exactly one search_web call and do not use any other tool."));
+        assert!(!prompt.contains("Use at most one additional call"));
+        assert!(prompt.contains("for Korean use exactly ` 원문 기사`"));
+        assert!(prompt.contains("-site:v.daum.net -site:n.news.naver.com"));
         for distracting_term in [
             "MCP servers",
             "permissions, agents",
@@ -273,5 +330,25 @@ mod tests {
         ] {
             assert!(!prompt.contains(distracting_term));
         }
+    }
+
+    #[test]
+    fn standard_search_retry_excludes_google_search_pages_from_its_query_and_output() {
+        let prompt = build_standard_search_retry_prompt("{}");
+
+        assert!(prompt.contains(" -site:google.com -site:google.co.kr"));
+        assert!(prompt.contains("-site:v.daum.net -site:n.news.naver.com"));
+        assert!(prompt.contains("for Korean use exactly ` 원문 기사`"));
+        assert!(prompt.contains("A google.com/search URL is a search-result page"));
+        assert!(prompt.contains("never a grounding transport or public source"));
+    }
+
+    #[test]
+    fn standard_search_final_retry_uses_a_distinct_current_evidence_query() {
+        let prompt = build_standard_search_final_retry_prompt("{}");
+
+        assert!(prompt.contains("This is the final bounded recovery attempt."));
+        assert!(prompt.contains("for Korean use exactly ` 원문 기사 실시간 시황`"));
+        assert!(prompt.contains("deep terminal publisher evidence page"));
     }
 }

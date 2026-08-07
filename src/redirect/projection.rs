@@ -37,6 +37,7 @@ pub(crate) async fn resolve_standard_search_run(
             restriction,
         } => Some((transports.clone(), restriction.clone())),
     };
+    let reject_site_roots = restricted.is_none();
     let has_direct_sources = !run.response.direct_search_urls()?.is_empty();
     let needs_resolver = !response_transports.is_empty()
         || has_direct_sources
@@ -80,6 +81,16 @@ pub(crate) async fn resolve_standard_search_run(
     }
     for non_source in run.response.non_source_search_urls()? {
         run.response.remove_search_url(&non_source)?;
+    }
+    if reject_site_roots {
+        for site_root in run
+            .response
+            .direct_search_urls()?
+            .into_iter()
+            .filter(HttpUrl::is_site_root)
+        {
+            run.response.remove_search_url(&site_root)?;
+        }
     }
     let direct_sources = run
         .response

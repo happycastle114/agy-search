@@ -5,7 +5,9 @@ use std::sync::Arc;
 use crate::{
     antigravity_version::Deadline,
     error::AgyError,
-    prompt::{build_prompt, build_standard_search_retry_prompt},
+    prompt::{
+        build_prompt, build_standard_search_final_retry_prompt, build_standard_search_retry_prompt,
+    },
     request::ContentRequest,
     response::Document as ResponseDocument,
     source_verification::VerifiedSources,
@@ -34,6 +36,7 @@ mod tests;
 pub(super) async fn execute(
     executable: &str,
     model: Option<ModelSlug>,
+    retry_model: Option<ModelSlug>,
     effort: Option<Effort>,
     deadline: Deadline,
     request: ContentRequest,
@@ -41,6 +44,7 @@ pub(super) async fn execute(
     let context = ExecutionContext {
         executable: executable.to_owned(),
         model,
+        retry_model,
         effort,
         deadline,
     };
@@ -208,13 +212,14 @@ async fn run_standard_search(
     match first {
         StandardSearchRun::Response(response) => Ok(response),
         StandardSearchRun::NoReachableResults | StandardSearchRun::RecoverableUnlistedTool => {
+            let retry_context = context.for_standard_retry();
             let second = validate_standard_run(
                 run_standard_search_unvalidated_once(
-                    context,
+                    &retry_context,
                     ContentExecution {
                         operation,
-                        tool_policy,
-                        schema,
+                        tool_policy: tool_policy.clone(),
+                        schema: schema.clone(),
                         prompt: build_standard_search_retry_prompt(request_json),
                     },
                 )
@@ -223,7 +228,27 @@ async fn run_standard_search(
             match second {
                 StandardSearchRun::Response(response) => Ok(response),
                 StandardSearchRun::NoReachableResults
-                | StandardSearchRun::RecoverableUnlistedTool => Err(AgyError::OutputInvalid),
+                | StandardSearchRun::RecoverableUnlistedTool => {
+                    let third = validate_standard_run(
+                        run_standard_search_unvalidated_once(
+                            &retry_context,
+                            ContentExecution {
+                                operation,
+                                tool_policy,
+                                schema,
+                                prompt: build_standard_search_final_retry_prompt(request_json),
+                            },
+                        )
+                        .await?,
+                    )?;
+                    match third {
+                        StandardSearchRun::Response(response) => Ok(response),
+                        StandardSearchRun::NoReachableResults
+                        | StandardSearchRun::RecoverableUnlistedTool => {
+                            Err(AgyError::OutputInvalid)
+                        }
+                    }
+                }
             }
         }
     }

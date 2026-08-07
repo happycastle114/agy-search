@@ -21,6 +21,12 @@ pub(super) fn render(
 ) -> Result<String, AgyError> {
     let mut schema = operation_schema(operation)?;
     super::source_schema::narrow_source_urls(&mut schema, source_restriction)?;
+    if operation == Operation::Search
+        && verification == VerificationMode::Standard
+        && matches!(source_restriction, SourceRestriction::Unrestricted)
+    {
+        super::source_schema::require_grounding_transport_urls(&mut schema)?;
+    }
     require_verification_schema(&mut schema, operation, verification, temporal_contract)?;
     serde_json::to_string(&schema).map_err(|_| AgyError::InvalidCommand)
 }

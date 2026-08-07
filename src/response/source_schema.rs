@@ -4,6 +4,28 @@ use serde_json::{Value, json};
 
 use crate::{error::AgyError, source_restriction::SourceRestriction};
 
+const GROUNDING_TRANSPORT_PATTERN: &str =
+    r"^https://vertexaisearch\.cloud\.google\.com/grounding-api-redirect/[^\s]+$";
+
+pub(super) fn require_grounding_transport_urls(schema: &mut Value) -> Result<(), AgyError> {
+    let definition = schema
+        .pointer_mut("/$defs/HttpUrl")
+        .and_then(Value::as_object_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    definition.insert(
+        "pattern".to_owned(),
+        Value::String(GROUNDING_TRANSPORT_PATTERN.to_owned()),
+    );
+    definition.insert(
+        "description".to_owned(),
+        Value::String(
+            "Exact Google grounding transport URL copied from the completed search_web result; the caller resolves it to the terminal publisher URL."
+                .to_owned(),
+        ),
+    );
+    Ok(())
+}
+
 pub(super) fn narrow_source_urls(
     schema: &mut Value,
     restriction: &SourceRestriction,

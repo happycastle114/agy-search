@@ -101,6 +101,9 @@ fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
         "standard-direct-localhost-dot-first",
         "standard-direct-dead-first",
         "standard-regional-google-first",
+        "standard-news-portal-first",
+        "standard-site-root-first",
+        "standard-landing-page-first",
     ] {
         let temporary = tempfile::tempdir()?;
         let (mut command, _redirect_trace, invocation_trace) = command(&temporary)?;

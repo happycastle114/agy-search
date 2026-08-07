@@ -126,7 +126,7 @@ fn resolves_large_final_content_length_with_header_only_requests()
 }
 
 #[test]
-fn retries_once_then_rejects_nonzero_redirect_transport_as_invalid_output()
+fn exhausts_bounded_retries_then_rejects_nonzero_redirect_transport()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: a resolver transport that exits with a curl-style transport failure status.
     let (_temporary, curl) = fake_curl()?;
@@ -142,8 +142,8 @@ fn retries_once_then_rejects_nonzero_redirect_transport_as_invalid_output()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy output invalid\n"));
 
-    // Then: it stays a sanitized output error after exactly one fresh standard Search.
-    assert_eq!(fs::read_to_string(invocation_trace)?.lines().count(), 2);
+    // Then: it stays a sanitized output error after the two bounded recovery attempts.
+    assert_eq!(fs::read_to_string(invocation_trace)?.lines().count(), 3);
     Ok(())
 }
 
@@ -180,8 +180,8 @@ fn rejects_unsafe_redirect_targets_before_a_second_request()
             .stdout(predicate::str::is_empty())
             .stderr(predicate::eq("error: agy output invalid\n"));
 
-        // Then: each of the two bounded Search attempts stops at its validated Google hop.
-        assert_eq!(trace_records(&trace)?.len(), 2, "unsafe mode: {mode}");
+        // Then: each bounded Search attempt stops at its validated Google hop.
+        assert_eq!(trace_records(&trace)?.len(), 3, "unsafe mode: {mode}");
     }
     Ok(())
 }

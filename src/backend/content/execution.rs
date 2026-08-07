@@ -41,8 +41,26 @@ Follow the caller's operation, source policy, tool budget, and output schema exa
 pub(super) struct ExecutionContext {
     pub(super) executable: String,
     pub(super) model: Option<ModelSlug>,
+    pub(super) retry_model: Option<ModelSlug>,
     pub(super) effort: Option<Effort>,
     pub(super) deadline: Deadline,
+}
+
+impl ExecutionContext {
+    pub(super) fn for_standard_retry(&self) -> Self {
+        let model = self.retry_model.clone().or_else(|| self.model.clone());
+        let effort = model
+            .as_ref()
+            .and_then(ModelSlug::effort_suffix)
+            .or(self.effort);
+        Self {
+            executable: self.executable.clone(),
+            retry_model: model.clone(),
+            model,
+            effort,
+            deadline: self.deadline,
+        }
+    }
 }
 
 pub(super) struct ContentExecution {
