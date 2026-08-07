@@ -57,8 +57,11 @@ impl ModelCatalog {
         let text = std::str::from_utf8(output).map_err(|_| ModelCatalogError::InvalidUtf8)?;
         let mut models = Vec::new();
         for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+            let slug = line
+                .split_once('\t')
+                .map_or(line, |(slug, _display_name)| slug);
             let resolved = ResolvedModel::new(
-                ModelSlug::from_str(line).map_err(|_| ModelCatalogError::InvalidSlug)?,
+                ModelSlug::from_str(slug).map_err(|_| ModelCatalogError::InvalidSlug)?,
             );
             if models.contains(&resolved) {
                 return Err(ModelCatalogError::DuplicateModel);
