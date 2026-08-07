@@ -6,6 +6,9 @@ use assert_cmd::Command;
 use serde_json::Value;
 use tempfile::TempDir;
 
+#[path = "source_restriction_e2e/portal_cases.rs"]
+mod portal_cases;
+
 fn fixture_agy() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py")
 }
@@ -165,28 +168,6 @@ fn unrestricted_research_rejects_a_direct_read_without_search() {
         .args(["research", "source-research-domain-read-only"])
         .assert()
         .code(6);
-}
-
-#[test]
-fn unrestricted_research_rejects_a_news_portal_source() {
-    command()
-        .args(["research", "source-research-news-portal"])
-        .assert()
-        .code(6);
-}
-
-#[test]
-fn restricted_research_preserves_an_explicit_news_portal_source() {
-    for restriction in [
-        ["--source-url", "https://v.daum.net/v/20260807120301584"],
-        ["--domain", "v.daum.net"],
-    ] {
-        command()
-            .args(["research", "source-research-news-portal"])
-            .args(restriction)
-            .assert()
-            .success();
-    }
 }
 
 #[test]
