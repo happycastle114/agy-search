@@ -93,6 +93,55 @@ fn replaces_a_direct_redirect_with_its_terminal_public_url()
 }
 
 #[test]
+fn restricted_direct_redirect_never_requests_an_out_of_scope_host()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, redirect_trace, invocation_trace) = command(&temporary)?;
+
+    command
+        .args([
+            "search",
+            "standard-direct-redirect",
+            "--source-url",
+            "https://example.com/redirecting",
+        ])
+        .assert()
+        .code(6);
+
+    let traced_urls = fs::read_to_string(&redirect_trace)?
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(traced_urls.len(), 3);
+    assert!(traced_urls.iter().all(|record| {
+        record.pointer("/url").and_then(Value::as_str) == Some("https://example.com/redirecting")
+    }));
+    assert_eq!(line_count(&invocation_trace)?, 3);
+    Ok(())
+}
+
+#[test]
+fn restricted_direct_source_never_requests_an_out_of_scope_initial_host()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, redirect_trace, invocation_trace) = command(&temporary)?;
+
+    command
+        .args([
+            "search",
+            "source-domain-lookalike",
+            "--domain",
+            "rust-lang.org",
+        ])
+        .assert()
+        .code(6);
+
+    assert!(!redirect_trace.exists());
+    assert_eq!(line_count(&invocation_trace)?, 3);
+    Ok(())
+}
+
+#[test]
 fn preserves_a_caller_restricted_news_portal_source() -> Result<(), Box<dyn std::error::Error>> {
     let temporary = tempfile::tempdir()?;
     let (mut command, _redirect_trace, invocation_trace) = command(&temporary)?;

@@ -187,6 +187,48 @@ fn rejects_unsafe_redirect_targets_before_a_second_request()
 }
 
 #[test]
+fn restricted_grounding_redirect_never_requests_an_out_of_scope_host()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_temporary, curl) = fake_curl()?;
+    let trace = curl.with_extension("trace");
+
+    command(&curl, &trace, "restricted-disallowed")
+        .args(["search", "grounding-redirect", "--domain", "example.com"])
+        .assert()
+        .code(6)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::eq("error: agy output invalid\n"));
+
+    let records = trace_records(&trace)?;
+    assert_eq!(records.len(), 3);
+    assert!(records.iter().all(|record| {
+        record.pointer("/url").and_then(Value::as_str)
+            == Some("https://vertexaisearch.cloud.google.com/grounding-api-redirect/token")
+    }));
+    Ok(())
+}
+
+#[test]
+fn restricted_grounding_allows_same_origin_transport_hops_before_an_allowed_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_temporary, curl) = fake_curl()?;
+    let trace = curl.with_extension("trace");
+
+    let assertion = command(&curl, &trace, "success")
+        .args(["search", "grounding-redirect", "--domain", "example.com"])
+        .assert()
+        .success();
+    let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    assert_eq!(
+        response.pointer("/results/0/url"),
+        Some(&json!("https://example.com/canonical?source=grounding"))
+    );
+    assert_eq!(trace_records(&trace)?.len(), 3);
+    Ok(())
+}
+
+#[test]
 fn rejects_loops_hop_overflow_and_malformed_multiple_or_oversize_headers()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: ambiguous redirect-chain response modes.

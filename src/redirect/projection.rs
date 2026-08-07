@@ -8,6 +8,7 @@ use super::{RedirectResolver, new_resolver};
 use crate::{
     error::AgyError,
     events::{GroundingRequirement, GroundingResolved, ParsedRun, PendingGrounding},
+    source_restriction::SourceRestriction,
     types::HttpUrl,
 };
 
@@ -51,16 +52,16 @@ pub(crate) async fn resolve_standard_search_run(
     };
     let mut verified_sources = HashSet::new();
 
-    if let Some((transports, restriction)) = restricted {
+    if let Some((transports, restriction)) = &restricted {
         let restricted_transports = transports.iter().cloned().collect::<HashSet<_>>();
         if !transports.is_empty() {
             let resolver = resolver.as_ref().ok_or(AgyError::OutputInvalid)?;
             for transport in transports {
-                let direct = resolver.resolve_one(&transport).await?;
+                let direct = resolver.resolve_restricted(transport, restriction).await?;
                 if !restriction.allows(&direct) {
                     return Err(AgyError::OutputInvalid);
                 }
-                run.response.replace_url(&transport, &direct);
+                run.response.replace_url(transport, &direct);
                 verified_sources.insert(direct);
             }
         }
@@ -69,7 +70,12 @@ pub(crate) async fn resolve_standard_search_run(
 
     if !response_transports.is_empty() {
         let resolver = resolver.as_ref().ok_or(AgyError::OutputInvalid)?.clone();
-        for (transport, outcome) in resolve_bounded(resolver, response_transports).await? {
+        let restriction = restricted
+            .as_ref()
+            .map(|(_, restriction)| restriction.clone());
+        for (transport, outcome) in
+            resolve_bounded(resolver, response_transports, restriction).await?
+        {
             match outcome {
                 SourceOutcome::Reachable(direct) => {
                     run.response.replace_url(&transport, &direct);
@@ -108,7 +114,8 @@ pub(crate) async fn resolve_standard_search_run(
         .collect::<Vec<_>>();
     if !direct_sources.is_empty() {
         let resolver = resolver.ok_or(AgyError::OutputInvalid)?;
-        for (source, outcome) in resolve_bounded(resolver, direct_sources).await? {
+        let restriction = restricted.map(|(_, restriction)| restriction);
+        for (source, outcome) in resolve_bounded(resolver, direct_sources, restriction).await? {
             match outcome {
                 SourceOutcome::Reachable(direct) => run.response.replace_url(&source, &direct),
                 SourceOutcome::Dead => run.response.remove_search_url(&source)?,
@@ -125,6 +132,7 @@ pub(crate) async fn resolve_standard_search_run(
 async fn resolve_bounded(
     resolver: RedirectResolver,
     sources: Vec<HttpUrl>,
+    restriction: Option<Box<SourceRestriction>>,
 ) -> Result<Vec<(HttpUrl, SourceOutcome)>, AgyError> {
     let mut pending = JoinSet::new();
     let mut completed = BTreeMap::new();
@@ -133,9 +141,13 @@ async fn resolve_bounded(
         while next < sources.len() && pending.len() < MAX_PROJECTION_CONCURRENCY {
             let source = sources.get(next).cloned().ok_or(AgyError::OutputInvalid)?;
             let worker = resolver.clone();
+            let worker_restriction = restriction.clone();
             let index = next;
             pending.spawn(async move {
-                let result = worker.resolve_one(&source).await;
+                let result = match worker_restriction {
+                    Some(restriction) => worker.resolve_restricted(&source, &restriction).await,
+                    None => worker.resolve_one(&source).await,
+                };
                 (index, source, result)
             });
             next += 1;
