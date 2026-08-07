@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -10,12 +11,16 @@ from typing import Final
 
 
 PREFERRED_MODEL: Final = "gemini-3.6-flash-low"
-RETRY_MODEL: Final = "gemini-3.6-flash-high"
+FIRST_RETRY_MODEL: Final = "gemini-3.6-flash-medium"
+FINAL_RETRY_MODEL: Final = "gemini-3.6-flash-high"
 TRACE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_TRACE"
 CATALOG_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_MODE"
 CATALOG_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_DELAY"
 CONTENT_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CONTENT_DELAY"
 CONTENT_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_CONTENT_MODE"
+GROUNDING_ORIGIN: Final = (
+    "https://vertexaisearch.cloud.google.com/grounding-api-redirect/"
+)
 
 
 def trace(record: dict[str, str | None]) -> None:
@@ -36,9 +41,10 @@ def option_value(option: str) -> str | None:
     return sys.argv[index + 1]
 
 
-def emit_search_response(source_url: str = "https://example.com/catalog-policy") -> None:
-    """Emit the minimum valid stream-json search response and one evidence tool."""
+def emit_search_response(transports: tuple[str, str]) -> None:
+    """Emit a schema-valid diversified search response and one evidence tool."""
     conversation_id = "catalog-policy"
+    source_url, second_url = transports
     structured_output = {
         "object": "search",
         "evidence_audit": {
@@ -48,7 +54,13 @@ def emit_search_response(source_url: str = "https://example.com/catalog-policy")
                     "claim": "catalog policy fixture",
                     "url": source_url,
                     "date": None,
-                }
+                },
+                {
+                    "scope": "catalog policy alternate",
+                    "claim": "catalog policy fixture alternate",
+                    "url": second_url,
+                    "date": None,
+                },
             ],
             "coverage_complete": True,
             "conclusion": "catalog policy fixture",
@@ -60,7 +72,14 @@ def emit_search_response(source_url: str = "https://example.com/catalog-policy")
                 "snippet": "catalog policy fixture",
                 "date": None,
                 "last_updated": None,
-            }
+            },
+            {
+                "title": "Catalog policy alternate",
+                "url": second_url,
+                "snippet": "catalog policy fixture alternate",
+                "date": None,
+                "last_updated": None,
+            },
         ],
     }
     events = [
@@ -87,6 +106,28 @@ def emit_search_response(source_url: str = "https://example.com/catalog-policy")
         print(json.dumps(event, separators=(",", ":")))
 
 
+def schema_accepts(transports: tuple[str, str]) -> bool:
+    """Validate the generated unrestricted Search boundary used by this fixture."""
+    raw_schema = option_value("--json-schema")
+    if raw_schema is None:
+        return False
+    try:
+        schema = json.loads(raw_schema)
+        pattern = schema["$defs"]["HttpUrl"]["pattern"]
+        candidate_minimum = schema["$defs"]["EvidenceAudit"]["properties"][
+            "candidates"
+        ]["minItems"]
+        result_bounds = schema["properties"]["results"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return False
+    return (
+        candidate_minimum == 2
+        and result_bounds.get("minItems") == 2
+        and result_bounds.get("maxItems") == 5
+        and all(re.fullmatch(pattern, transport) for transport in transports)
+    )
+
+
 def main() -> int:
     """Dispatch the exact Antigravity surface exercised by catalog-policy tests."""
     arguments = sys.argv[1:]
@@ -102,9 +143,14 @@ def main() -> int:
         mode = os.environ.get(CATALOG_MODE_ENVIRONMENT, "preferred")
         if mode == "failed":
             return 1
-        if mode == "preferred":
-            print(PREFERRED_MODEL)
-            print(RETRY_MODEL)
+        catalog = {
+            "preferred": [PREFERRED_MODEL, FIRST_RETRY_MODEL, FINAL_RETRY_MODEL],
+            "without-medium": [PREFERRED_MODEL, FINAL_RETRY_MODEL],
+            "without-high": [PREFERRED_MODEL, FIRST_RETRY_MODEL],
+            "low-only": [PREFERRED_MODEL],
+        }
+        for model in catalog.get(mode, []):
+            print(model)
         print("fixture-model")
         return 0
     trace(
@@ -117,7 +163,7 @@ def main() -> int:
     configured_delay = os.environ.get(CONTENT_DELAY_ENVIRONMENT)
     if configured_delay is not None:
         time.sleep(float(configured_delay))
-    source_url = "https://example.com/catalog-policy"
+    token_kind = "catalog-policy"
     content_mode = os.environ.get(CONTENT_MODE_ENVIRONMENT)
     if content_mode in {"retry", "retry-twice"}:
         with Path(os.environ[TRACE_ENVIRONMENT]).open(encoding="utf-8") as stream:
@@ -126,8 +172,14 @@ def main() -> int:
             )
         failed_attempts = 2 if content_mode == "retry-twice" else 1
         if content_count <= failed_attempts:
-            source_url = "https://www.google.com/search?q=catalog+policy"
-    emit_search_response(source_url)
+            token_kind = "catalog-policy-dead"
+    transports = (
+        f"{GROUNDING_ORIGIN}{token_kind}-1",
+        f"{GROUNDING_ORIGIN}{token_kind}-2",
+    )
+    if not schema_accepts(transports):
+        return 64
+    emit_search_response(transports)
     return 0
 
 

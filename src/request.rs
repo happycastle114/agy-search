@@ -157,6 +157,13 @@ impl ContentRequest {
         }
     }
 
+    pub(crate) const fn search_result_limit(&self) -> Option<u16> {
+        match self {
+            Self::Search(request) => Some(request.max_results),
+            Self::Extract(_) | Self::Map(_) | Self::Crawl(_) | Self::Research(_) => None,
+        }
+    }
+
     pub(crate) const fn tool_budget(&self) -> ResearchToolBudget {
         match self {
             Self::Search(request) => match request.verification {

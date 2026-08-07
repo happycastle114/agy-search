@@ -51,7 +51,7 @@ fn prefers_only_unpinned_low_effort_standard_search() {
     );
 
     // Then: only ordinary low-effort Search can request the fixed typed preference.
-    assert_eq!(preferred, Some(PreferredSearchModel::Gemini36FlashLow));
+    assert_eq!(preferred, Some(PreferredSearchModel::Low));
     for (operation, verification, effort) in ineligible {
         assert_eq!(
             preferred_search_model(operation, verification, effort),

@@ -24,14 +24,21 @@ const MAX_ADVISORY_CATALOG_DISCOVERY: Duration = Duration::from_secs(5);
 
 struct ContentModels {
     primary: Option<ModelSlug>,
-    retry: Option<ModelSlug>,
+    recoveries: [RecoveryModel; 2],
+}
+
+#[derive(Clone)]
+enum RecoveryModel {
+    Inherit,
+    Selected(ModelSlug),
+    Disabled,
 }
 
 impl ContentModels {
-    fn fixed(model: Option<ModelSlug>) -> Self {
+    const fn fixed(model: Option<ModelSlug>) -> Self {
         Self {
-            retry: model.clone(),
             primary: model,
+            recoveries: [RecoveryModel::Inherit, RecoveryModel::Inherit],
         }
     }
 }
@@ -65,15 +72,7 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
                         .await?
                 }
             };
-            content::execute(
-                &agy_path,
-                selected_models.primary,
-                selected_models.retry,
-                effort,
-                deadline,
-                *request,
-            )
-            .await
+            content::execute(&agy_path, selected_models, effort, deadline, *request).await
         }
     }
 }
@@ -145,12 +144,24 @@ async fn select_preferred_search_models(
     match discover_models(executable, cwd.to_path_buf(), timeout).await {
         Ok(catalog) => {
             let primary = catalog.preferred(preferred);
-            let retry = primary
-                .as_ref()
-                .and_then(|_| catalog.preferred(PreferredSearchModel::Gemini36FlashHigh));
+            let Some(_) = primary else {
+                return Ok(ContentModels::fixed(None));
+            };
+            let medium = catalog.preferred(PreferredSearchModel::Medium);
+            let high = catalog.preferred(PreferredSearchModel::High);
+            let recoveries = match (medium, high) {
+                (Some(medium), Some(high)) => [
+                    RecoveryModel::Selected(medium),
+                    RecoveryModel::Selected(high),
+                ],
+                (Some(model), None) | (None, Some(model)) => {
+                    [RecoveryModel::Selected(model), RecoveryModel::Disabled]
+                }
+                (None, None) => [RecoveryModel::Disabled, RecoveryModel::Disabled],
+            };
             Ok(ContentModels {
-                retry: retry.or_else(|| primary.clone()),
                 primary,
+                recoveries,
             })
         }
         Err(_) if deadline.remaining().is_ok() => Ok(ContentModels::fixed(None)),
@@ -166,7 +177,7 @@ const fn preferred_search_model(
     match operation {
         Operation::Search => match verification {
             VerificationMode::Standard => match effort {
-                Some(Effort::Low) => Some(PreferredSearchModel::Gemini36FlashLow),
+                Some(Effort::Low) => Some(PreferredSearchModel::Low),
                 Some(Effort::Medium | Effort::High) | None => None,
             },
             VerificationMode::TemporalComparison => None,

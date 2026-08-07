@@ -15,6 +15,8 @@ use crate::{
     types::{Effort, ModelSlug, Operation, OutputFormat, ResearchToolPolicy},
 };
 
+use super::super::RecoveryModel;
+
 const ISOLATION_DIRECTORY: &str = "agy-search";
 const ISOLATION_PREFIX: &str = "agy-search-";
 const AGENT_NAME: &str = "agy-search";
@@ -41,21 +43,38 @@ Follow the caller's operation, source policy, tool budget, and output schema exa
 pub(super) struct ExecutionContext {
     pub(super) executable: String,
     pub(super) model: Option<ModelSlug>,
-    pub(super) retry_model: Option<ModelSlug>,
+    pub(super) recoveries: [RecoveryModel; 2],
     pub(super) effort: Option<Effort>,
     pub(super) deadline: Deadline,
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum RecoveryStage {
+    First,
+    Final,
+}
+
 impl ExecutionContext {
-    pub(super) fn for_standard_retry(&self) -> Self {
-        let model = self.retry_model.clone().or_else(|| self.model.clone());
+    pub(super) fn for_standard_retry(&self, stage: RecoveryStage) -> Option<Self> {
+        let recovery = match stage {
+            RecoveryStage::First => &self.recoveries[0],
+            RecoveryStage::Final => &self.recoveries[1],
+        };
+        match recovery {
+            RecoveryModel::Inherit => Some(self.with_standard_model(self.model.clone())),
+            RecoveryModel::Selected(model) => Some(self.with_standard_model(Some(model.clone()))),
+            RecoveryModel::Disabled => None,
+        }
+    }
+
+    fn with_standard_model(&self, model: Option<ModelSlug>) -> Self {
         let effort = model
             .as_ref()
             .and_then(ModelSlug::effort_suffix)
             .or(self.effort);
         Self {
             executable: self.executable.clone(),
-            retry_model: model.clone(),
+            recoveries: self.recoveries.clone(),
             model,
             effort,
             deadline: self.deadline,

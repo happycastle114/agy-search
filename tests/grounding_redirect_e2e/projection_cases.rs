@@ -102,7 +102,7 @@ fn projects_mixed_standard_search_and_prunes_failed_sources()
     );
     assert!(!String::from_utf8_lossy(stdout).contains("vertexaisearch.cloud.google.com"));
     assert_eq!(fs::read_to_string(invocation_trace)?.lines().count(), 1);
-    assert_eq!(trace_records(&trace)?.len(), 4);
+    assert_eq!(trace_records(&trace)?.len(), 5);
     Ok(())
 }
 

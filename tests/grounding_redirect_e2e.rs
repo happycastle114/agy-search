@@ -14,6 +14,9 @@ const FAKE_CURL: &str = include_str!("fixtures/fake_grounding_redirect_curl.py")
 #[path = "grounding_redirect_e2e/projection_cases.rs"]
 mod projection_cases;
 
+#[path = "grounding_redirect_e2e/fallback_cases.rs"]
+mod fallback_cases;
+
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

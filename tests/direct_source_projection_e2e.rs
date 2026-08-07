@@ -66,7 +66,7 @@ fn projects_reachable_direct_results_and_prunes_dead_rows() -> Result<(), Box<dy
             .map(Vec::len),
         Some(1)
     );
-    assert_eq!(line_count(&redirect_trace)?, 2);
+    assert_eq!(line_count(&redirect_trace)?, 3);
     assert_eq!(line_count(&invocation_trace)?, 1);
     Ok(())
 }

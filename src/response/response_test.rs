@@ -14,6 +14,7 @@ fn search_schema_requires_internal_evidence_audit() {
         VerificationMode::Standard,
         None,
         &SourceRestriction::Unrestricted,
+        Some(5),
     )
     .expect("standard Search schema must render");
     let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
@@ -33,6 +34,7 @@ fn search_schema_rejects_empty_evidence_text_before_deserialization() {
         VerificationMode::Standard,
         None,
         &SourceRestriction::Unrestricted,
+        Some(5),
     )
     .expect("standard Search schema must render");
     let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
@@ -62,6 +64,7 @@ fn search_schema_requires_http_source_urls_before_deserialization() {
         VerificationMode::Standard,
         None,
         &SourceRestriction::Unrestricted,
+        Some(5),
     )
     .expect("standard Search schema must render");
     let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
@@ -96,9 +99,56 @@ fn restricted_search_schema_accepts_a_canonical_domain_policy() {
         VerificationMode::Standard,
         None,
         &restriction,
+        Some(5),
     );
 
     assert!(schema.is_ok(), "restricted schema failed: {schema:?}");
+}
+
+#[test]
+fn unrestricted_standard_search_schema_requests_redundant_source_candidates() {
+    // Given: the default public Search result capacity.
+    let schema = ResponseDocument::schema(
+        Operation::Search,
+        VerificationMode::Standard,
+        None,
+        &SourceRestriction::Unrestricted,
+        Some(5),
+    )
+    .expect("standard Search schema must render");
+    let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
+
+    // When: the generated-result cardinality is inspected at the Antigravity boundary.
+    let bounds = [
+        "/$defs/EvidenceAudit/properties/candidates/minItems",
+        "/properties/results/minItems",
+        "/properties/results/maxItems",
+    ]
+    .map(|pointer| document.pointer(pointer).and_then(Value::as_u64));
+
+    // Then: one dead redirect can be pruned without forcing a second model invocation.
+    assert_eq!(bounds, [Some(2), Some(2), Some(5)]);
+}
+
+#[test]
+fn single_result_search_keeps_a_single_source_candidate() {
+    let schema = ResponseDocument::schema(
+        Operation::Search,
+        VerificationMode::Standard,
+        None,
+        &SourceRestriction::Unrestricted,
+        Some(1),
+    )
+    .expect("single-result Search schema must render");
+    let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
+    let bounds = [
+        "/$defs/EvidenceAudit/properties/candidates/minItems",
+        "/properties/results/minItems",
+        "/properties/results/maxItems",
+    ]
+    .map(|pointer| document.pointer(pointer).and_then(Value::as_u64));
+
+    assert_eq!(bounds, [Some(1), Some(1), Some(1)]);
 }
 
 #[test]

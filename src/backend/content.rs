@@ -9,7 +9,7 @@ use crate::{
     request::ContentRequest,
     response::Document as ResponseDocument,
     source_verification::VerifiedSources,
-    types::{Effort, ModelSlug, Operation},
+    types::{Effort, Operation},
     verification::{TemporalAssessment, TemporalRecoveryPlan, assess_search},
 };
 
@@ -21,6 +21,7 @@ use execution::{ContentExecution, ExecutionContext, run_content_once};
 use standard_search::run_standard_search;
 use temporal::recover_temporal;
 
+use super::ContentModels;
 #[cfg(test)]
 use crate::verification::ScopeLabel;
 #[cfg(test)]
@@ -32,16 +33,19 @@ mod tests;
 
 pub(super) async fn execute(
     executable: &str,
-    model: Option<ModelSlug>,
-    retry_model: Option<ModelSlug>,
+    models: ContentModels,
     effort: Option<Effort>,
     deadline: Deadline,
     request: ContentRequest,
 ) -> Result<ResponseDocument, AgyError> {
+    let ContentModels {
+        primary,
+        recoveries,
+    } = models;
     let context = ExecutionContext {
         executable: executable.to_owned(),
-        model,
-        retry_model,
+        model: primary,
+        recoveries,
         effort,
         deadline,
     };
@@ -51,6 +55,7 @@ pub(super) async fn execute(
         request.verification(),
         request.temporal_contract(),
         request.source_restriction(),
+        request.search_result_limit(),
     )?;
     let request_json = request.to_json().map_err(|_| AgyError::InvalidCommand)?;
     let prompt = build_prompt(operation, request.verification(), &request_json);

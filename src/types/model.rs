@@ -98,15 +98,17 @@ impl ModelCatalog {
 /// Catalog-backed model preference for ordinary latency-sensitive Search.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PreferredSearchModel {
-    Gemini36FlashLow,
-    Gemini36FlashHigh,
+    Low,
+    Medium,
+    High,
 }
 
 impl PreferredSearchModel {
     const fn slug(self) -> &'static str {
         match self {
-            Self::Gemini36FlashLow => "gemini-3.6-flash-low",
-            Self::Gemini36FlashHigh => "gemini-3.6-flash-high",
+            Self::Low => "gemini-3.6-flash-low",
+            Self::Medium => "gemini-3.6-flash-medium",
+            Self::High => "gemini-3.6-flash-high",
         }
     }
 }

@@ -17,8 +17,12 @@ pub(super) const fn tool_instruction(
              -site:news.nate.com`. A restricted search must keep its caller-owned site expression \
              instead. For unrestricted input, set every URL field to an exact \
              vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the completed \
-             tool result, never to a publisher URL; the wrapper resolves it. Return after that call when its direct-publisher or primary-source snippets \
-             prove the answer."
+             tool result, never to a publisher URL; the wrapper resolves it. Reject placeholders, \
+             publisher slugs, and any token that was not copied verbatim. When max_results is \
+             at least two, return at least two distinct result items and audit candidates copied \
+             from different completed search results. Use distinct grounding transports so one \
+             dead publisher redirect can be discarded without another model call. Return after \
+             that call when the direct-publisher or primary-source snippets prove the answer."
         }
         (Operation::Search, VerificationMode::TemporalComparison) => {
             "Use this bounded sequence: (1) search_web with the exact scoped query; (2) when \

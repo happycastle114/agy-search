@@ -18,6 +18,7 @@ pub(super) fn render(
     verification: VerificationMode,
     temporal_contract: Option<&TemporalContract>,
     source_restriction: &SourceRestriction,
+    search_result_limit: Option<u16>,
 ) -> Result<String, AgyError> {
     let mut schema = operation_schema(operation)?;
     super::source_schema::narrow_source_urls(&mut schema, source_restriction)?;
@@ -26,6 +27,10 @@ pub(super) fn render(
         && matches!(source_restriction, SourceRestriction::Unrestricted)
     {
         super::source_schema::require_grounding_transport_urls(&mut schema)?;
+        super::source_schema::require_diverse_search_results(
+            &mut schema,
+            search_result_limit.ok_or(AgyError::InvalidCommand)?,
+        )?;
     }
     require_verification_schema(&mut schema, operation, verification, temporal_contract)?;
     serde_json::to_string(&schema).map_err(|_| AgyError::InvalidCommand)

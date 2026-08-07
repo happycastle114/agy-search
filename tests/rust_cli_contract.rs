@@ -34,5 +34,5 @@ fn reports_package_version_without_downstream_agy() {
     // Then: version discovery succeeds without launching Antigravity
     assertion
         .success()
-        .stdout(predicate::eq("agy-search 0.2.8\n"));
+        .stdout(predicate::eq("agy-search 0.2.9\n"));
 }

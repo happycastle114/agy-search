@@ -104,8 +104,9 @@ An explicit model pays dynamic discovery before content: five local runs put
 --version`. The 3.6 arm still had the lowest eligible end-to-end median. The
 remaining common post-model time includes fail-closed Standard Search
 terminal-URL validation. It replaces Google transports, probes direct URLs, and
-removes dead or unsafe rows through the same DNS-pinned header-only path; do not
-remove that source-quality and SSRF boundary to improve a benchmark number.
+removes dead or unsafe rows through the same DNS-pinned path. HEAD-rejecting
+publishers receive one range-requested GET capped at 2 MiB; do not remove that
+source-quality and SSRF boundary to improve a benchmark number.
 
 For ordinary low-effort standard Search, the wrapper now makes one advisory
 `agy models` query, bounded to five seconds inside the existing caller deadline,
@@ -116,6 +117,15 @@ remain strict and run fresh full-deadline discovery; temporal/research/site
 operations and medium/high Search skip the preference query. Re-run this
 comparison before changing the preference because provider behavior and the
 runtime catalog can change independently of this wrapper.
+
+The 0.2.9 correction keeps the low fast path and diversifies bounded recovery
+through the discovered medium and high tiers. Its exact `한국 오늘 증시` serial
+regression exited 0 in all five runs at 18.95, 55.82, 26.67, 58.03, and 21.15
+seconds (26.67-second median). Three runs used only low; two used low then
+medium. Every public URL was a terminal non-Google HTTPS publisher page. This
+also covered publishers that returned 404 to HEAD but 200 to the bounded GET
+fallback. As with the earlier benchmark, this is finite incident evidence, not
+an availability or latency SLO.
 
 The final 0.2.6 Korean-market regression then ran the exact broad query `한국 오늘
 증시` five times serially through that default path after direct-source terminal

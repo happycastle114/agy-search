@@ -79,11 +79,14 @@ fn render_prompt(kind: PromptKind, request_json: &str) -> String {
          version, value, or date, must appear in the public title or snippet and its audit claim; a \
          generic phrase such as release update does not satisfy an exact-field request. \
          Copy every URL exactly from a completed tool result, including a Google grounding transport \
-         URL; the wrapper resolves that transport URL to its direct HTTPS target. A Google host \
+         URL; the wrapper resolves that transport URL to its direct HTTPS target. Never substitute \
+         a placeholder, UUID, article identifier, publisher slug, or human-readable path for a \
+         verbatim completed-tool value. A Google host \
          whose path is /search is a search-result page, not a grounding transport, and must never \
          be audited or returned. For unrestricted Search, a bare site root is not an evidence \
          page and must never be audited or returned. Never construct, \
-         shorten, normalize, or guess a source URL. Public URLs must be unique. Multiple audit \
+         shorten, normalize, or guess a source URL. Never copy one transport into multiple result \
+         items. Public URLs must be unique. Multiple audit \
          candidates may share one URL when one canonical page proves several scopes. {verification}\
          \nINPUT_JSON={request_json}"
     )
@@ -128,11 +131,14 @@ const fn prompt_parts(kind: PromptKind) -> PromptParts {
              site expression instead. A google.com/search URL is a search-result page, never a \
              grounding transport or public source. For unrestricted input, set every URL field to \
              an exact vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the \
-             completed tool result, never to a publisher URL; the wrapper resolves it. Return only sources whose completed result \
-             supplies an exact terminal publisher URL and enough evidence for the wire contract.",
+             completed tool result, never to a publisher URL; the wrapper resolves it. When \
+             max_results is at least two, return at least two distinct result items and audit \
+             candidates copied from different completed search results. Return only sources whose \
+             completed result supplies an exact terminal publisher URL and enough evidence for the \
+             wire contract.",
             "Populate evidence_audit before public results. Emit a public result only after adding \
-             a candidate with the exact same URL. Keep the retry to the smallest fully audited \
-             result set instead of returning an unaudited source.",
+             a candidate with the exact same URL. Prefer independent fully audited sources instead \
+             of repeating one result.",
             "For every non-null public date, require a same-URL candidate with the same normalized \
              date, exact source_date_text, and a contiguous evidence_excerpt containing that exact \
              source_date_text. Set the public date to null when that complete binding is absent.",
@@ -151,10 +157,12 @@ const fn prompt_parts(kind: PromptKind) -> PromptParts {
              instead. Never return a search-result page, news portal, bare site root, guessed URL, \
              or unreachable URL. For unrestricted input, set every URL field to an exact \
              vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the completed \
-             tool result, never to a publisher URL; the wrapper resolves it. Return only a deep \
-             terminal publisher evidence page supplied by the completed search result.",
-            "Populate evidence_audit before public results. Emit the smallest fully audited \
-             result set, and require every public URL to equal one audit candidate URL.",
+             tool result, never to a publisher URL; the wrapper resolves it. When max_results is \
+             at least two, return at least two distinct result items and audit candidates copied \
+             from different completed search results. Return only deep terminal publisher evidence \
+             pages supplied by the completed search result.",
+            "Populate evidence_audit before public results. Emit independent fully audited sources, \
+             and require every public URL to equal one audit candidate URL.",
             "For every non-null public date, require a same-URL candidate with the same normalized \
              date, exact source_date_text, and a contiguous evidence_excerpt containing that exact \
              source_date_text. Set the public date to null when that complete binding is absent.",

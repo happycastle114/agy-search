@@ -109,9 +109,16 @@ def redirect_main(arguments: list[str]) -> int:
         return 64
     parsed = urlparse(source_url)
     if parsed.hostname == "vertexaisearch.cloud.google.com":
-        host = "example.com" if final is RedirectFinal.ALLOWED else "iana.org"
+        token = parsed.path.rsplit("/", maxsplit=1)[-1]
+        if token.startswith("catalog-policy-dead-"):
+            location = f"https://www.google.com/search?q={token}"
+        elif token.startswith("catalog-policy-"):
+            location = f"https://example.com/{token}"
+        else:
+            host = "example.com" if final is RedirectFinal.ALLOWED else "iana.org"
+            location = f"https://{host}/canonical"
         print("HTTP/1.1 302 Test\r")
-        print(f"Location: https://{host}/canonical\r")
+        print(f"Location: {location}\r")
         print("\r")
         print("\nAGY_REDIRECT_META:302:0")
     else:
