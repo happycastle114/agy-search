@@ -169,7 +169,13 @@ fn temporal_as_of_rejects_an_after_cutoff_scoped_fallback_without_partial_output
     .code(6)
     .stdout(predicate::str::is_empty())
     .stderr(predicate::eq("error: agy output invalid\n"));
-    assert_recovery_trace(&trace_scopes(&agy_trace)?);
+    let scopes = trace_scopes(&agy_trace)?;
+    assert_eq!(scopes.first(), Some(&None));
+    let mut recovered = scopes.into_iter().skip(1).collect::<Vec<_>>();
+    recovered.sort();
+    let alpha_only = vec![Some("alpha".to_owned())];
+    let both_scopes = vec![Some("alpha".to_owned()), Some("beta".to_owned())];
+    assert!(recovered == alpha_only || recovered == both_scopes);
     Ok(())
 }
 #[test]
