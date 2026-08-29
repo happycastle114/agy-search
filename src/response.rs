@@ -100,4 +100,19 @@ impl ResponseDocument {
             | Self::Models(_) => Err(AgyError::OutputInvalid),
         }
     }
+
+    pub(crate) fn project_unbound_standard_research_dates(&mut self) -> Result<(), AgyError> {
+        match self {
+            Self::Research(response) => public_dates::project_unbound_standard_dates(
+                &mut response.sources,
+                &response.evidence_audit,
+            ),
+            Self::Search(_)
+            | Self::Extract(_)
+            | Self::Map(_)
+            | Self::Crawl(_)
+            | Self::Status(_)
+            | Self::Models(_) => Err(AgyError::OutputInvalid),
+        }
+    }
 }

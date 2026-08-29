@@ -3,7 +3,7 @@
 use std::{net::IpAddr, path::PathBuf, time::Duration};
 
 use thiserror::Error;
-use tokio::time::Instant;
+use tokio::{task::JoinSet, time::Instant};
 
 use crate::{
     error::AgyError,
@@ -19,6 +19,7 @@ pub(crate) use crate::source_network::{PinnedSource, SafeSourceUrl};
 const MAX_BODY_BYTES: usize = 512 * 1024;
 const MAX_METADATA_BYTES: usize = 128;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
+const MAX_FETCH_CONCURRENCY: usize = 4;
 const STATUS_SENTINEL: &[u8] = b"\nAGY_SOURCE_META:";
 
 #[derive(Debug)]
@@ -50,6 +51,8 @@ pub(crate) enum SourceFetchError {
     InvalidUtf8,
     #[error("source body was empty")]
     EmptyBody,
+    #[error("source fetch task failed")]
+    TaskFailed,
 }
 
 impl FetchedSource {
@@ -70,6 +73,34 @@ impl SourceFetcher {
     ) -> Result<FetchedSource, SourceFetchError> {
         let pinned = resolve(url.clone(), deadline).await?;
         self.fetch_pinned(&pinned, deadline).await
+    }
+
+    pub(crate) async fn fetch_many(
+        &self,
+        sources: &[SafeSourceUrl],
+        deadline: Instant,
+    ) -> Result<Vec<FetchedSource>, SourceFetchError> {
+        let mut fetched = Vec::with_capacity(sources.len());
+        for batch in sources.chunks(MAX_FETCH_CONCURRENCY) {
+            let mut tasks = JoinSet::new();
+            for (index, source) in batch.iter().enumerate() {
+                let worker = self.clone();
+                let source = source.clone();
+                tasks.spawn(async move { (index, worker.fetch(&source, deadline).await) });
+            }
+            let mut completed = std::collections::BTreeMap::new();
+            while let Some(result) = tasks.join_next().await {
+                let (index, response) = result.map_err(|_| SourceFetchError::TaskFailed)?;
+                completed.insert(index, response);
+            }
+            if completed.len() != batch.len() {
+                return Err(SourceFetchError::TaskFailed);
+            }
+            for response in completed.into_values() {
+                fetched.push(response?);
+            }
+        }
+        Ok(fetched)
     }
 
     pub(crate) async fn fetch_pinned(

@@ -57,12 +57,14 @@ pub(crate) struct ResearchAttemptBudget(u16);
 
 impl ResearchAttemptBudget {
     const MAXIMUM: u16 = 12;
-    const OVERHEAD: u16 = 2;
+    const ATTEMPTS_PER_SOURCE: u16 = 2;
+    const DISCOVERY_OVERHEAD: u16 = 1;
 
     pub(crate) fn from_max_sources(max_sources: u16) -> Self {
         Self(
             max_sources
-                .saturating_add(Self::OVERHEAD)
+                .saturating_mul(Self::ATTEMPTS_PER_SOURCE)
+                .saturating_add(Self::DISCOVERY_OVERHEAD)
                 .min(Self::MAXIMUM),
         )
     }
@@ -75,6 +77,7 @@ impl ResearchAttemptBudget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ResearchToolBudget {
     Single,
+    DirectReads(usize),
     StandardSearch,
     TemporalSearch,
     Research(ResearchAttemptBudget),
@@ -115,6 +118,7 @@ impl ResearchToolBudget {
     pub(crate) fn maximum(self) -> usize {
         match self {
             Self::Single => 1,
+            Self::DirectReads(maximum) => maximum,
             Self::StandardSearch => 2,
             Self::TemporalSearch => 8,
             Self::Research(budget) => budget.maximum(),

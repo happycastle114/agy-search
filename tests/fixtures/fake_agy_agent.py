@@ -25,6 +25,7 @@ def valid_agent_invocation(arguments: list[str]) -> bool:
     }
     return (
         arguments.count("--agent") == 1
+        and arguments.count("--dangerously-skip-permissions") == 1
         and agent_name == "agy-search"
         and required_structure.issubset(definition.splitlines())
         and "call_mcp_tool" not in definition

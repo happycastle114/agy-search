@@ -2,9 +2,9 @@
 
 ## Global contract
 
-Before the first content command in an agent session, use this cheap local
-preflight and do not run a separate model command unless an explicit pin is
-requested:
+Before the first content command in an agent session, require agy-search 0.3.0
+or newer and use this cheap local preflight. Do not invoke `agy-search models`
+unless an explicit pin is requested:
 
 ```bash
 command -v agy-search
@@ -24,15 +24,17 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
 - Set `AGY_SEARCH_AGY_PATH` instead of `--agy-path` when appropriate.
 - Set `AGY_SEARCH_CURL_PATH` only when the default `curl` executable is not the
   intended grounding-link resolver/source verifier.
-- Discover `SLUG` with `agy-search models` in the current environment.
+- Discover `SLUG` with `agy-search models` only for an explicit model pin in
+  the current environment.
 - Content commands default to `--effort low`. Raise effort only for deliberate
   deep synthesis; explicit effort always overrides the default.
-- Ordinary work omits `--model`. For an explicit pin whose returned slug ends
-  in `-low`, `-medium`, or `-high`, pass the matching `--effort`; a mismatch is
-  rejected before downstream execution. Unpinned low-effort Standard Search
-  performs one internal five-second advisory catalog lookup and selects exact
-  `gemini-3.6-flash-low` only when advertised; otherwise it falls back to the
-  provider default. Other operations and effort levels skip that preference.
+- Ordinary work omits both `agy-search models` and `--model`. CLI 0.3.0
+  performs a bounded advisory catalog lookup internally and prefers exact
+  `gemini-3.7-flash-low` when present without creating a caller model pin.
+  Temporal/research/content operations negotiate the matching Gemini 3.7 Flash
+  effort when advertised. For an explicit pin whose returned slug ends in
+  `-low`, `-medium`, or `-high`, pass
+  the matching `--effort`; a mismatch is rejected before downstream execution.
 - Verification defaults to `standard`. Use `temporal-comparison` for an exact
   latest/current tuple or ordered as-of-latest work across a caller-declared
   set. Search and research then require 1-8 unique `--scope` values and 1-8
@@ -51,13 +53,16 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
   to four research-tool calls and never uses per-scope recovery.
 - Successful stdout is canonical JSON. Diagnostics use stderr. `--json` is an
   accepted explicit compatibility flag on every subcommand.
+- In Standard Search and Standard Research, `date` is optional: normalize a
+  valid date that cannot bind to same-URL audit evidence to `null`, while
+  rejecting malformed dates. Temporal comparison keeps strict date handling.
 - Add `-o PATH` to atomically write JSON and keep stdout empty.
 - Use query `-` to read up to 100 KiB from stdin for `search` and `research`.
-- Antigravity 1.1.10 or newer is required. Before content and `status`, the
+- Antigravity 1.1.20 or newer is required. Before content and `status`, the
   wrapper accepts only bare `X.Y.Z` output from `agy --version`, rejects
   prefixes, release suffixes, and extra lines rather than guessing capabilities,
   compares numeric semantic components, and rejects a bare semantic version
-  below 1.1.10 before model discovery. `models` is intentionally a diagnostic command without that
+  below 1.1.20 before model discovery. `models` is intentionally a diagnostic command without that
   guard. The wrapper disables print-mode slash/skill expansion so every request
   field remains data. Search and
   research send typed `primary_first`, `complete_requested_scope`, and
@@ -96,6 +101,30 @@ Bounds:
 `map` and `crawl` accept only same-origin results unless `--allow-external` is
 explicit. They are bounded agent operations rather than exhaustive crawlers.
 
+## Depth-routed Research templates
+
+For the skill's Synthesis and Deep levels, effort, timeout, and `--max-sources`
+are one atomic routing contract, not suggestions. Keep exactly one of every
+required flag on every Research invocation; do not rely on defaults, omit them
+when using stdin, or change them for a narrower Deep follow-up. Returning fewer
+sources is allowed and preferred when they prove the material claims.
+
+```bash
+# depth-budget: synthesis
+agy-search --effort medium --timeout 120 research "$QUESTION" --max-sources 4
+
+# depth-budget: deep-primary
+agy-search --effort high --timeout 180 research "$QUESTION" --max-sources 8
+
+# depth-budget: deep-follow-up
+agy-search --effort high --timeout 180 research "$NARROWER_QUESTION" --max-sources 8
+```
+
+Before each Research call, compare its tokens with the matching template and do
+not execute until `--effort`, `--timeout`, and `--max-sources` each occur exactly
+once with the required value, including stdin-query forms. Then check that the
+query preserves the material claim or conflict being investigated.
+
 `--as-of` is a typed, inclusive temporal cutoff for explicit source
 publication/release dates. Use it in temporal Search or Research whenever the
 caller supplies an as-of/cutoff, or when the current execution date is explicitly
@@ -105,17 +134,26 @@ into a global-winner comparison.
 
 For Search and Research, `--domain` is the canonical caller-owned domain-tree
 allowlist: it permits exactly that host and its subdomains. `--source-url` is a
-canonical exact-URL allowlist. In standard mode it restricts returned and
-internal-audit URL membership only; it does not fetch or verify the URL body.
+canonical exact-URL allowlist. In standard Search it restricts returned and
+internal-audit URL membership; it does not trigger a source-body fetch.
+A bare origin is rejected unless it is an exact caller-supplied source URL.
+Standard Research must complete a canonical page read for every retained URL
+after discovery, and every finding citation must equal one retained source URL.
+A complete exact URL set is also independently prefetched, supplied as bounded
+query-relevant source windows, and reused for same-snapshot body binding.
 In temporal comparison, every declared exact HTTPS `--source-url` is fetched
 and verified, and an exact URL dominates any same-domain path that `--domain`
 would otherwise allow. Both flags prove membership, not official, first-party,
-or project-maintained ownership. For such hard source-class requests, you MUST
-pass only explicitly trusted domains/URLs and preserve the class in the query. If the
-exact trust set is unavailable, stop and report mechanical enforcement is
-impossible, or perform only user-permitted discovery with clearly unverified
-candidates. Antigravity cannot guarantee that no third-party snippet was ever
-viewed during search.
+or project-maintained ownership. Preference wording (`prefer`, `prioritize`,
+`favor`, or a primary-source preference) affects query prose and result ranking
+only; it MUST NOT create either allowlist, even for a named organization or
+page. Pass an allowlist only for an explicit exclusive hard constraint or an
+explicit caller-supplied trusted domain/URL set. For hard source-class requests,
+you MUST pass only explicitly trusted domains/URLs and preserve the class in
+the query. If the exact trust set is unavailable, stop and report mechanical
+enforcement is impossible, or perform only user-permitted discovery with
+clearly unverified candidates. Antigravity cannot guarantee that no third-party
+snippet was ever viewed during search.
 
 ## Response shapes
 
@@ -130,13 +168,12 @@ viewed during search.
   `sources[{title,url,snippet,date,last_updated}]`
 
 For source metadata, `date` is an explicit publication/release date and
-`last_updated` is an explicit modification/update date. In Standard Search,
-`date` is `null` when the source lacks an explicit publication/release date or
-the returned same-URL evidence cannot bind its complete source date text. Never
-infer it from `last_updated`, execution, crawl, fetch, query, or cutoff time.
-Malformed metadata and Standard Research remain fail-closed. Temporal comparison
-verifies publication dates only, requires `last_updated: null`, and rejects a
-non-null update value with exit 6.
+`last_updated` is an explicit modification/update date. In Standard Search and
+Standard Research, a valid `date` that cannot bind to same-URL audit evidence
+becomes `null`, and a malformed date is rejected. Never infer a date from
+`last_updated`, execution, crawl, fetch, query, or cutoff time. Temporal
+comparison verifies publication dates strictly, requires `last_updated: null`,
+and rejects a non-null update value with exit 6.
 
 Search and research schemas also require an internal evidence audit with at
 least one candidate and one candidate per requested scope. The wrapper validates
@@ -158,10 +195,14 @@ source-date text in a same-URL source, requires each structured source date to
 be ISO and audit-backed, and requires the unique latest candidate to remain
 publicly visible; it is one-shot and never recovers or emits a partial report.
 Every Standard Search result and audit URL is validated with bounded,
-HTTPS-only, header-only curl arguments. Google grounding transports are
-resolved; direct URLs are probed; dead, unsafe, regional Google search, and
-cache rows are discarded with their audit rows. Each redirect hop is parsed,
-DNS-validated, and pinned before the next request.
+HTTPS-only, DNS-pinned curl arguments. Validation starts with HEAD; a direct
+publisher that rejects HEAD receives one range-requested GET capped at 2 MiB
+under the same deadline and redirect policy. Google grounding transports are
+resolved; dead, unsafe, regional Google search, and cache rows are discarded
+with their audit rows. Each redirect hop is parsed, DNS-validated, and pinned
+before the next request. When no publishable result survives, Standard Search
+uses the available low, medium, and high tiers at most once each under the
+original command deadline. Do not add an outer retry for the same broad command.
 
 Preserve a hard caller constraint such as `only official`, `only first-party`,
 or `only project-maintained` in the query. Do not infer ownership from a domain

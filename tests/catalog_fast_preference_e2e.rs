@@ -9,9 +9,11 @@ use assert_cmd::Command;
 use serde_json::Value;
 use tempfile::TempDir;
 
-const PREFERRED_MODEL: &str = "gemini-3.6-flash-low";
-const FIRST_RETRY_MODEL: &str = "gemini-3.6-flash-medium";
-const FINAL_RETRY_MODEL: &str = "gemini-3.6-flash-high";
+const PREFERRED_MODEL: &str = "gemini-3.7-flash-low";
+const FIRST_RETRY_MODEL: &str = "gemini-3.7-flash-medium";
+const FINAL_RETRY_MODEL: &str = "gemini-3.7-flash-high";
+const QUALITY_MEDIUM_MODEL: &str = "gemini-3.7-flash-medium";
+const QUALITY_HIGH_MODEL: &str = "gemini-3.7-flash-high";
 
 #[path = "catalog_fast_preference_e2e/recovery_schedule_cases.rs"]
 mod recovery_schedule_cases;
@@ -167,7 +169,7 @@ fn explicit_model_remains_a_strict_catalog_validated_override()
 }
 
 #[test]
-fn medium_and_high_searches_skip_advisory_catalog_preference()
+fn medium_and_high_searches_use_catalog_negotiated_gemini_3_7()
 -> Result<(), Box<dyn std::error::Error>> {
     for effort in ["medium", "high"] {
         // Given: an unpinned standard search requesting a non-low effort.
@@ -180,12 +182,18 @@ fn medium_and_high_searches_skip_advisory_catalog_preference()
             .assert()
             .success();
 
-        // Then: no catalog process runs and the provider default receives the requested effort.
+        let expected_model = if effort == "medium" {
+            QUALITY_MEDIUM_MODEL
+        } else {
+            QUALITY_HIGH_MODEL
+        };
+        // Then: catalog negotiation selects the matching Gemini 3.7 Flash effort.
         assert_eq!(
             trace_records(&trace)?,
             vec![
                 serde_json::json!({"kind":"version","model":null,"effort":null}),
-                serde_json::json!({"kind":"content","model":null,"effort":effort}),
+                serde_json::json!({"kind":"models","model":null,"effort":null}),
+                serde_json::json!({"kind":"content","model":expected_model,"effort":effort}),
             ]
         );
     }

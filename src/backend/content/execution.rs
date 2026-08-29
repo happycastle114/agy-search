@@ -55,19 +55,19 @@ pub(super) enum RecoveryStage {
 }
 
 impl ExecutionContext {
-    pub(super) fn for_standard_retry(&self, stage: RecoveryStage) -> Option<Self> {
+    pub(super) fn for_recovery(&self, stage: RecoveryStage) -> Option<Self> {
         let recovery = match stage {
             RecoveryStage::First => &self.recoveries[0],
             RecoveryStage::Final => &self.recoveries[1],
         };
         match recovery {
-            RecoveryModel::Inherit => Some(self.with_standard_model(self.model.clone())),
-            RecoveryModel::Selected(model) => Some(self.with_standard_model(Some(model.clone()))),
+            RecoveryModel::Inherit => Some(self.with_model(self.model.clone())),
+            RecoveryModel::Selected(model) => Some(self.with_model(Some(model.clone()))),
             RecoveryModel::Disabled => None,
         }
     }
 
-    fn with_standard_model(&self, model: Option<ModelSlug>) -> Self {
+    fn with_model(&self, model: Option<ModelSlug>) -> Self {
         let effort = model
             .as_ref()
             .and_then(ModelSlug::effort_suffix)
@@ -94,6 +94,7 @@ pub(super) enum StandardSearchRun {
     Response(ResponseDocument),
     NoReachableResults,
     RecoverableUnlistedTool,
+    RecoverableFailedWebTool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -162,6 +163,14 @@ async fn run_content(
                 .map_err(|_| AgyError::OutputInvalid)?;
             return Ok(StandardSearchRun::RecoverableUnlistedTool);
         }
+        Err(StructuredRunError::RecoverableFailedWebTool(response))
+            if resolution == GroundingResolutionMode::StandardSearchProjection =>
+        {
+            response
+                .validate_search_document()
+                .map_err(|_| AgyError::OutputInvalid)?;
+            return Ok(StandardSearchRun::RecoverableFailedWebTool);
+        }
         Err(error) => return Err(error.into_public_error()),
     };
     let normalization_remaining = context.deadline.remaining()?;
@@ -202,6 +211,7 @@ fn print_argv(
 ) -> Vec<String> {
     let mut argv = vec![
         context.executable.clone(),
+        "--dangerously-skip-permissions".to_owned(),
         "--disable-slash-commands".to_owned(),
         "--agent".to_owned(),
         AGENT_NAME.to_owned(),

@@ -17,6 +17,7 @@ use crate::{
     types::{NonEmptyText, SourceUrlKind},
 };
 
+use projection::{SourceOutcome, resolve_bounded};
 pub(crate) use projection::{StandardSearchResolution, resolve_standard_search_run};
 
 const RESOLVER_ENVIRONMENT: &str = "AGY_SEARCH_CURL_PATH";
@@ -51,13 +52,16 @@ pub(crate) async fn resolve_grounding_run(
         return Ok(run.mark_resolved());
     }
     let resolver = new_resolver(cwd)?;
-    for transport in transports {
-        let direct = match &run.grounding {
-            GroundingRequirement::None => resolver.resolve_one(&transport).await?,
-            GroundingRequirement::Restricted {
-                transports: _,
-                restriction,
-            } => resolver.resolve_restricted(&transport, restriction).await?,
+    let restriction = match &run.grounding {
+        GroundingRequirement::None => None,
+        GroundingRequirement::Restricted {
+            transports: _,
+            restriction,
+        } => Some(restriction.clone()),
+    };
+    for (transport, outcome) in resolve_bounded(resolver, transports, restriction).await? {
+        let SourceOutcome::Reachable(direct) = outcome else {
+            return Err(AgyError::OutputInvalid);
         };
         run.response.replace_url(&transport, &direct);
     }

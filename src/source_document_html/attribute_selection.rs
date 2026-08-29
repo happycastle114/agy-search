@@ -14,7 +14,15 @@ pub(crate) fn elements_with_attribute(
     html: &str,
     wanted: &str,
 ) -> Result<Vec<AttributedElement>, HtmlStructureError> {
-    let mut selection = Selection::default();
+    elements_with_attribute_on(html, None, wanted)
+}
+
+pub(crate) fn elements_with_attribute_on(
+    html: &str,
+    element: Option<&str>,
+    wanted: &str,
+) -> Result<Vec<AttributedElement>, HtmlStructureError> {
+    let mut selection = Selection::new(element);
     let mut cursor = 0;
     while let Some(open_at) = next_markup(html, cursor) {
         let token = parse_token(html, open_at, wanted)?;
@@ -34,8 +42,8 @@ pub(crate) fn elements_with_attribute(
     selection.finish()
 }
 
-#[derive(Default)]
 struct Selection<'a> {
+    element: Option<&'a str>,
     captures: Vec<Capture<'a>>,
     elements: Vec<(usize, AttributedElement)>,
     inert: Vec<&'a str>,
@@ -43,6 +51,16 @@ struct Selection<'a> {
 }
 
 impl<'a> Selection<'a> {
+    const fn new(element: Option<&'a str>) -> Self {
+        Self {
+            element,
+            captures: Vec::new(),
+            elements: Vec::new(),
+            inert: Vec::new(),
+            order: 0,
+        }
+    }
+
     fn open(&mut self, opening: OpeningToken<'a>) -> Result<(), HtmlStructureError> {
         self.increment_depths(opening.name)?;
         let hidden = !self.inert.is_empty() || is_inert(opening.name);
@@ -52,7 +70,10 @@ impl<'a> Selection<'a> {
             }
             self.inert.push(opening.name);
         }
-        if let AttributeState::Present(value) = opening.value {
+        let selected_element = self
+            .element
+            .is_none_or(|element| same_name(element, opening.name));
+        if selected_element && let AttributeState::Present(value) = opening.value {
             if hidden || opening.self_closing || is_void(opening.name) {
                 return Err(HtmlStructureError);
             }

@@ -41,13 +41,16 @@ pub(crate) struct ParsedRun<State> {
 pub(crate) enum StructuredRunError {
     Invalid(AgyError),
     RecoverableUnlistedTool(Box<ResponseDocument>),
+    RecoverableFailedWebTool(Box<ResponseDocument>),
 }
 
 impl StructuredRunError {
     pub(crate) fn into_public_error(self) -> AgyError {
         match self {
             Self::Invalid(error) => error,
-            Self::RecoverableUnlistedTool(_) => AgyError::OutputInvalid,
+            Self::RecoverableUnlistedTool(_) | Self::RecoverableFailedWebTool(_) => {
+                AgyError::OutputInvalid
+            }
         }
     }
 }
@@ -91,9 +94,19 @@ pub(crate) fn parse_structured_run(
                 response,
             )));
         }
+        research_tool_policy::EvidencePolicyAssessment::RecoverableFailedWebTool => {
+            return Err(StructuredRunError::RecoverableFailedWebTool(Box::new(
+                response,
+            )));
+        }
         research_tool_policy::EvidencePolicyAssessment::Rejected => {
             return Err(AgyError::OutputInvalid.into());
         }
+    }
+    if operation == Operation::Research
+        && !source_policy::research_sources_were_read(&events, &response)
+    {
+        return Err(AgyError::OutputInvalid.into());
     }
     Ok(ParsedRun {
         response,

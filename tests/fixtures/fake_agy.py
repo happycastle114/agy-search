@@ -18,10 +18,11 @@ def emit(
     query: str | None = None,
     *,
     additional_tool: str | None = None,
-    additional_tool_url: str | None = None,
+    additional_tool_url: str | list[str] | None = None,
     followup_query: str | None = None,
     additional_tool_count: int = 1,
     scenario_override: str | None = None,
+    failed_tool_before: str | None = None,
 ) -> None:
     evidence_audit = structured_output.get("evidence_audit")
     scenario = scenario_override or (
@@ -34,6 +35,24 @@ def emit(
         else current_conversation
     )
     events = [{"event": "init", "conversation_id": current_conversation}]
+    if failed_tool_before is not None:
+        failed_info: dict[str, object] = {"name": failed_tool_before}
+        for state in ("ACTIVE", "ERROR"):
+            events.append(
+                {
+                    "event": "step_update",
+                    "step_update": {
+                        "conversation_id": tool_conversation,
+                        "state": state,
+                        "step_type": "tool",
+                        "tool_info": (
+                            failed_info
+                            if state == "ACTIVE"
+                            else failed_info | {"error": "invalid arguments"}
+                        ),
+                    },
+                }
+            )
     for tool_index in range(tool_count):
         active_query = followup_query if tool_index > 0 and followup_query else query
         tool_info: dict[str, object] = {"name": tool}
@@ -92,11 +111,16 @@ def emit(
                     }
                 )
     if additional_tool is not None:
-        for _ in range(additional_tool_count):
+        for additional_index in range(additional_tool_count):
             for state in ("ACTIVE", "DONE"):
                 additional_tool_info: dict[str, object] = {"name": additional_tool}
                 if additional_tool_url is not None:
-                    additional_tool_info["parameters"] = {"Url": additional_tool_url}
+                    selected_url = (
+                        additional_tool_url[additional_index]
+                        if isinstance(additional_tool_url, list)
+                        else additional_tool_url
+                    )
+                    additional_tool_info["parameters"] = {"Url": selected_url}
                 events.append(
                     {
                         "event": "step_update",

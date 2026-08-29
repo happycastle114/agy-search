@@ -128,6 +128,18 @@ impl ResponseDocument {
             .collect())
     }
 
+    pub(crate) fn search_landing_sources(&self) -> Result<Vec<(HttpUrl, String)>, AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        Ok(value
+            .results
+            .iter()
+            .filter(|item| item.url.is_site_root())
+            .map(|item| (item.url.clone(), item.title.as_str().to_owned()))
+            .collect())
+    }
+
     pub(crate) fn remove_search_url(&mut self, removed: &HttpUrl) -> Result<(), AgyError> {
         let Self::Search(value) = self else {
             return Err(AgyError::OutputInvalid);
@@ -138,6 +150,33 @@ impl ResponseDocument {
             .candidates
             .retain(|item| &item.url != removed);
         Ok(())
+    }
+
+    pub(crate) fn deduplicate_search_urls(&mut self) -> Result<(), AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        let mut result_urls = HashSet::new();
+        value
+            .results
+            .retain(|item| result_urls.insert(item.url.clone()));
+        Ok(())
+    }
+
+    pub(crate) fn reject_duplicate_search_urls(&self) -> Result<(), AgyError> {
+        let Self::Search(value) = self else {
+            return Err(AgyError::OutputInvalid);
+        };
+        let mut result_urls = HashSet::new();
+        if value
+            .results
+            .iter()
+            .all(|item| result_urls.insert(&item.url))
+        {
+            Ok(())
+        } else {
+            Err(AgyError::OutputInvalid)
+        }
     }
 
     pub(crate) const fn search_results_empty(&self) -> Result<bool, AgyError> {
@@ -156,7 +195,7 @@ impl ResponseDocument {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::response_models::{MapLink, MapObject, MapResponse};
+    use crate::response_models::{MapLink, MapObject, MapResponse, SearchResponse};
     use crate::types::NonEmptyText;
 
     fn http_url(value: &str) -> HttpUrl {
@@ -185,5 +224,39 @@ mod tests {
             response.grounding_redirects(),
             vec![http_url(first), http_url(second)]
         );
+    }
+
+    #[test]
+    fn resolved_search_urls_deduplicate_in_first_seen_order() -> Result<(), AgyError> {
+        let search: SearchResponse = serde_json::from_value(serde_json::json!({
+            "object": "search",
+            "evidence_audit": {
+                "candidates": [
+                    {"scope":"first","claim":"first claim","url":"https://example.com/item"},
+                    {"scope":"duplicate","claim":"duplicate claim","url":"https://example.com/item"}
+                ],
+                "coverage_complete": true,
+                "conclusion": "complete"
+            },
+            "results": [
+                {"title":"first","url":"https://example.com/item","snippet":"first snippet"},
+                {"title":"duplicate","url":"https://example.com/item","snippet":"duplicate snippet"}
+            ]
+        }))
+        .expect("search fixture must deserialize");
+        let mut response = ResponseDocument::Search(search);
+
+        response
+            .deduplicate_search_urls()
+            .expect("search URLs must deduplicate");
+
+        let ResponseDocument::Search(search) = response else {
+            return Err(AgyError::OutputInvalid);
+        };
+        assert_eq!(search.results.len(), 1);
+        assert_eq!(search.evidence_audit.candidates.len(), 2);
+        let first = search.results.first().ok_or(AgyError::OutputInvalid)?;
+        assert_eq!(first.title.as_str(), "first");
+        Ok(())
     }
 }

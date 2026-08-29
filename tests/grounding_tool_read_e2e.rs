@@ -47,7 +47,9 @@ events = [
         "object": "search",
         "evidence_audit": {
             "candidates": [{"scope": "primary", "claim": "Evidence", "url": direct,
-                            "date": None}],
+                            "date": None, "value": "Evidence",
+                            "evidence_excerpt":
+                                "Source contains Evidence from the verified source body."}],
             "coverage_complete": True,
             "conclusion": "Evidence"
         },
@@ -66,6 +68,11 @@ from urllib.parse import urlparse
 
 arguments = sys.argv[1:]
 url = arguments[arguments.index("--url") + 1]
+source_fetch = any("AGY_SOURCE_META" in argument for argument in arguments)
+if source_fetch:
+    print("<p>Source contains Evidence from the verified source body.</p>")
+    print("\nAGY_SOURCE_META:200:0")
+    raise SystemExit(0)
 with open(os.environ["AGY_TOOL_READ_TRACE"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps({"url": url}) + "\n")
 host = urlparse(url).hostname

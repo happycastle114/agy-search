@@ -8,21 +8,41 @@ pub(super) const fn tool_instruction(
 ) -> &'static str {
     match (operation, verification) {
         (Operation::Search, VerificationMode::Standard) => {
-            "Begin immediately with search_web; perform no preparatory tool discovery. Use exactly \
-             one search_web call and do not use any other tool. Start its query with \
-             INPUT_JSON.query byte-for-byte. For an unrestricted search, append a short \
-             query-language phrase meaning original evidence article (for Korean use exactly \
-             ` 원문 기사`; for English use exactly ` original source article`), followed by \
+            "Begin immediately with search_web; perform no preparatory tool discovery. For \
+             unrestricted input, use exactly one search_web call and do not use any other tool. \
+             For restricted input, use at most two research-tool calls. Begin with one search_web \
+             call. If its best result is only a bare origin or an ineligible landing/listing page, \
+             make one focused second search_web call: retain INPUT_JSON.query byte-for-byte as the \
+             prefix and append the exact requested entity plus an exact title, value, version, or \
+             date token visible in the first completed result. Otherwise, the second call may be \
+             read_url_content only when the best completed result is an ineligible landing or \
+             listing page that visibly links the exact requested item. Start the first search query with \
+             INPUT_JSON.query byte-for-byte. Append a short \
+             query-language phrase meaning official primary evidence page (for Korean use exactly \
+             ` 원문 공식 페이지`; for English use exactly ` official primary source page`), followed by \
              ` -site:google.com -site:google.co.kr -site:v.daum.net -site:n.news.naver.com \
-             -site:news.nate.com`. A restricted search must keep its caller-owned site expression \
-             instead. For unrestricted input, set every URL field to an exact \
+             -site:news.nate.com` for unrestricted input, or by every exact caller-owned site \
+             expression for restricted input. For unrestricted input, set every URL field to an exact \
              vertexaisearch.cloud.google.com/grounding-api-redirect URL copied from the completed \
              tool result, never to a publisher URL; the wrapper resolves it. Reject placeholders, \
              publisher slugs, and any token that was not copied verbatim. When max_results is \
              at least two, return at least two distinct result items and audit candidates copied \
              from different completed search results. Use distinct grounding transports so one \
              dead publisher redirect can be discarded without another model call. Return after \
-             that call when the direct-publisher or primary-source snippets prove the answer."
+             that call when the direct-publisher or primary-source snippets prove the answer. \
+             Match page identity as well as host identity: when the query asks for a particular \
+             dated article, release, announcement, statement, report, or event, choose the \
+             deepest result whose own title is that item. Never substitute a homepage, newsroom, \
+             headlines page, category, archive, index, search page, or listing merely because its \
+             snippet mentions the requested item. A redirect such as a product's documented \
+             `/latest` endpoint is acceptable only when it resolves directly to the requested \
+             item. A bare origin is provisional discovery only; the wrapper deterministically \
+             promotes one uniquely matching deep same-origin link or rejects it. On the restricted \
+             landing-page path, read only the exact completed-result URL, \
+             inspect its artifact at most once, and copy one exact absolute HTTPS href or resolve \
+             one root-relative href against that unchanged origin. The anchor's own visible text \
+             must identify the requested item. Never invent or edit a slug, follow a second link, \
+             or return the landing page; fail closed when the exact deep href is absent."
         }
         (Operation::Search, VerificationMode::TemporalComparison) => {
             "Use this bounded sequence: (1) search_web with the exact scoped query; (2) when \
@@ -49,13 +69,7 @@ pub(super) const fn tool_instruction(
              attempted research-tool calls total. Do not read a redirect and then read its direct \
              target again; one completed read is enough. Wait for every call to finish."
         }
-        (Operation::Research, VerificationMode::Standard) => {
-            "When INPUT_JSON.source_restriction.urls supplies the complete exact evidence set, \
-             read each literal member directly and do not search for it. Otherwise use search_web \
-             for the independent sources needed by the synthesis. Honor exactly \
-             INPUT_JSON.tool_call_budget as the maximum number of attempted research-tool calls. \
-             Do not prepend a separate discovery phase."
-        }
+        (Operation::Research, VerificationMode::Standard) => standard_research_instruction(),
         (Operation::Research, VerificationMode::TemporalComparison) => {
             "When INPUT_JSON.source_restriction.urls supplies the complete exact evidence set, \
              read each literal member directly and do not search for it. Otherwise use search_web \
@@ -64,12 +78,73 @@ pub(super) const fn tool_instruction(
              attempted research-tool calls and wait for each."
         }
         (Operation::Extract | Operation::Crawl, _) => {
-            "Use only read_url_content and wait for it to complete."
+            "Use only read_url_content and wait for it to complete. For Extract, set title to the \
+             exact visible page title and content to plain relevant source text only. Never put \
+             JSON, Markdown fencing, a nested response schema, commentary, or paraphrase in content."
         }
         (Operation::Map, _) => {
             "Use only search_web or read_url_content and wait for it to complete."
         }
     }
+}
+
+const fn standard_research_instruction() -> &'static str {
+    "When INPUT_JSON.source_restriction.urls supplies the complete exact evidence set, \
+     read each literal member directly and do not search for it. Never read a search-result \
+     URL or invent a URL. Otherwise, use search_web to discover independent canonical \
+     evidence pages, then use read_url_content on every page retained in sources. A completed \
+     search without a completed source-page read is insufficient for Research. Copy every \
+     retained source URL from a completed tool result, prefer a deep evidence page over its \
+     site origin, and make every finding citation exactly equal one retained source URL. A cited \
+     page must itself contain the finding's exact named entity, version, value, and supporting \
+     statement in its read body; navigation text or a link to another page is not evidence. \
+     Copy a short contiguous supporting body passage verbatim into the same-URL audit candidate's \
+     evidence_excerpt. The passage must be visible body prose or one complete labeled table row, \
+     never a page title, meta description, navigation item, HTML tag, or link label, and must contain \
+     at least five whitespace-separated words and forty Unicode characters. Copy a table row in its \
+     visible order; never turn it into a sentence or merge it with another row. Set value to the shortest \
+     predicate-bearing material conclusion copied as one exact \
+     contiguous phrase from that evidence_excerpt; never summarize, reorder, or combine values in \
+     value. A product name, version identifier, page heading, or other claim subject alone is never a \
+     value: after removing the subject, the remaining exact value must still directly answer its scope. \
+     Never weaken a requested claim while preserving its label: documentation presence is not GA or \
+     release status, generic multimodal support is not a requested modality list, and a configurable \
+     thinking parameter is not a requested set of supported levels. For a status, release, or \
+     availability scope, the evidence passage and value must contain the exact requested status wording \
+     or an explicit contrary status. For an enumerated capability scope, retain the complete requested \
+     set in one page's body. If the current page lacks that predicate-bearing evidence, do not emit a \
+     candidate for it; continue with the reserved focused search. For a labeled table row, value must be \
+     the literal relevant data cell, not a sentence made from the row. For a named version or product claim, retain the \
+     deepest model- or version-specific page whose visible heading or body states both the exact \
+     identifier and claimed status instead of a family overview or site root. Reserve one remaining \
+     research-tool call for a focused exact-identifier search when the first results do not expose \
+     such a page; do not spend that call padding generic sources. Allocate a distinct deepest page \
+     to every materially different requested claim before reading a second overview, changelog, or \
+     duplicate page for an already supported claim. A source may cover multiple claims only when \
+     its visible body contains a complete supporting prose passage and exact value for each claim. \
+     An explicit request for N distinct findings and N distinct retained sources forbids sharing one \
+     source between numbered claims: count the verbatim source URLs before any reads, and immediately \
+     use the focused search for a missing claim when the initial search exposes fewer than N distinct \
+     evidence transports. A documentation or guide request must retain the documentation page itself, \
+     never a community, forum, discussion, or issue page that merely mentions it. \
+     After each read, classify the page from its visible body rather than its search-result title. If a \
+     supposed documentation transport resolves to a question, discussion, issue, or user post, discard \
+     it, mark that numbered claim still missing, and spend the focused search plus read on that claim \
+     even when the pre-read transport count had reached N. \
+     When an overview or index body exposes an exact HTTPS or root-relative deep-page href for a \
+     missing claim, read that linked page and cite the deep page, not the overview's navigation text. \
+     A literal root-relative href may be resolved only against the completed read page's unchanged \
+     HTTPS scheme and authority; copy its path and query byte-for-byte and never resolve `..`, a \
+     protocol-relative href, another host, or text that was not an href. This is the only URL \
+     construction exception. Use a second focused search only when a material requested claim still \
+     lacks a deep evidence page and budget remains. Honor exactly INPUT_JSON.tool_call_budget as the \
+     maximum number of attempted research-tool calls. Before finish, perform a no-tool completeness \
+     check against INPUT_JSON.query: every separately listed status, feature, capability, comparison, \
+     or question must still have a candidate, a finding citing it, and a retained source. If the query \
+     explicitly numbers or counts requested claims or distinct sources, preserve each count exactly. \
+     Do not finish with fewer or more retained sources than an explicit count. Never drop a completed \
+     deep-page read that proves a requested claim merely because another claim is already supported. \
+     Do not prepend a separate discovery phase."
 }
 
 pub(super) const fn wire_instruction(operation: Operation) -> &'static str {
@@ -90,7 +165,8 @@ pub(super) const fn wire_instruction(operation: Operation) -> &'static str {
             "Set object=research. Source keys are only title,url,snippet,date,last_updated; finding \
              keys are only title,summary,citations. evidence_audit keys are only candidates, \
              coverage_complete,conclusion; candidate keys are only scope,claim,url,date,value, \
-             source_date_text,evidence_excerpt. Never emit \
+             source_date_text,evidence_excerpt. Every candidate needs a non-empty evidence_excerpt \
+             copied verbatim from the completed same-URL page read. Never emit \
              source_url, canonical_url, explicit_source_date, version_date, or scopes_checked."
         }
         Operation::Extract | Operation::Map | Operation::Crawl => {

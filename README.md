@@ -6,10 +6,11 @@ mapping, bounded crawling, and cited research. It needs no separate search API
 key and no Python or Node.js runtime.
 
 Antigravity 1.1.8 added print-mode `json`, `stream-json`, and custom JSON Schema
-enforcement. Releases 1.1.9 and 1.1.10 added print-mode slash expansion and
-fixed headless model/effort selection. `agy-search` uses the structured contract,
-disables slash expansion so input stays data, and validates the event evidence
-and result again before anything reaches stdout.
+enforcement. This release requires 1.1.20, where headless print error handling
+is reliable, and is tested with 1.1.22. `agy-search` uses the structured
+contract, disables slash expansion so input stays data, runs inside an isolated
+read-only custom agent, and validates event evidence and results again before
+anything reaches stdout.
 
 ## Install
 
@@ -55,9 +56,9 @@ cargo install --git https://github.com/happycastle114/agy-search --locked
 
 ## Requirements
 
-- An installed and signed-in Google Antigravity CLI 1.1.10 or newer
-- `curl`, used for bounded Standard Search terminal-URL validation and opt-in
-  temporal source-body verification
+- An installed and signed-in Google Antigravity CLI 1.1.20 or newer
+- `curl`, used for bounded terminal-URL validation and independently fetched
+  Search, Extract, Research, and temporal source-body evidence
 - Web tools available to the selected Antigravity model
 
 ```bash
@@ -74,7 +75,7 @@ low-effort Standard Search owns its single bounded advisory lookup internally.
 Before every content command, and before `status` claims availability,
 `agy-search` runs the cheap `agy --version` preflight. It accepts exactly the
 official bare release shape `X.Y.Z`, compares numeric semantic components, and
-rejects a bare semantic version below 1.1.10 before content or status can start.
+rejects a bare semantic version below 1.1.20 before content or status can start.
 Prefixes, pre-release/build suffixes, and extra lines are rejected rather than
 guessed, so an ambiguous capability report cannot reach `-p` or model discovery.
 `models` remains an explicit diagnostic command and does not run the floor
@@ -104,8 +105,17 @@ agy-search research "Compare current agent web research CLIs" --max-sources 10
 agy-search research "topic" -o .agy-search/research.json
 ```
 
-Research derives its attempted web-tool call budget from `--max-sources`: two
-discovery/verification attempts beyond the requested source count, capped at 12.
+Multi-URL Extract runs up to four isolated single-page AGY workers concurrently,
+preserves input order, and fails the combined request if any page run fails.
+Each worker independently prefetches its exact URL, gives AGY bounded
+query-relevant body windows, and replaces model-written content with bounded
+windows selected from that same fetched body. Nested JSON, paraphrases, or
+hallucinated text from the model are therefore never published as extracted
+content.
+
+Research derives its attempted web-tool call budget from `--max-sources` as
+`min(2 * max_sources + 1, 12)`, funding bounded discovery plus source-specific
+search/read verification pairs without exceeding 12 attempts.
 
 `--json` is accepted on every command for explicit script compatibility; JSON
 is already the only success format. Global options may appear before or after
@@ -128,14 +138,15 @@ agy-search --agy-path /absolute/path/to/agy status
 
 `--model` is checked strictly against the current `agy models` output. A slug ending in
 `-low`, `-medium`, or `-high` must use the matching `--effort`. When `--model`
-is omitted for standard Search at low effort, `agy-search` makes one advisory
+is omitted for Standard Search at low effort, `agy-search` makes one advisory
 catalog query, bounded to five seconds within the caller deadline, and selects
-`gemini-3.6-flash-low` only when that exact catalog entry is present. If it is
+`gemini-3.7-flash-low` only when that exact catalog entry is present. If it is
 absent or the advisory query fails while time remains, content omits `--model`
-and uses the provider default. Temporal Search, Research, Extract, Map, Crawl,
-and medium/high effort Search do not make that preference query. The
-same catalog may supply `gemini-3.6-flash-medium` for the first bounded recovery
-and `gemini-3.6-flash-high` for the final recovery. Unavailable recovery tiers
+and uses the provider default. For temporal Search, Research, Extract, Map,
+Crawl, and medium/high Search, the same bounded negotiation selects the matching
+`gemini-3.7-flash-{effort}` entry when advertised and otherwise falls back to
+the provider default. The catalog may supply `gemini-3.7-flash-medium` for the first bounded recovery
+and `gemini-3.7-flash-high` for the final recovery. Unavailable recovery tiers
 are skipped and never duplicated, and every attempt shares the original deadline. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
@@ -144,10 +155,20 @@ source verifier. Content commands default to low
 reasoning effort for latency; pass `--effort medium` or `--effort high` only
 when the task needs deeper synthesis. For Search and Research, `--domain` is a
 caller-owned domain-tree allowlist (the named host plus its subdomains), while
-`--source-url` is a canonical exact-URL allowlist. In standard mode, either flag
-restricts returned/audited membership only and `--source-url` does not fetch a
-source body. Standard Search still performs a metadata-only terminal HTTPS
-reachability check. Use `--verification temporal-comparison` as temporal source
+`--source-url` is a canonical exact-URL allowlist. In standard Search, either
+flag restricts returned/audited membership and exact URLs remain metadata-only.
+Standard Search still performs a terminal HTTPS
+reachability check. A bare site origin is rejected as evidence unless the caller
+listed that exact origin with `--source-url`. Standard Research must complete a
+canonical source-page read for every retained source in addition to discovery;
+its citations must equal retained source URLs. The wrapper then fetches each
+terminal page independently, requires every audit exact value to occur on that
+same page, and replaces the model excerpt and public source snippet with bounded
+context sliced from the fetched body. When Research receives a complete exact
+URL set, the wrapper prefetches those pages once, supplies bounded relevant body
+windows to both the primary and fail-closed recovery, and verifies the result
+against the same immutable body snapshot. Use `--verification
+temporal-comparison` as temporal source
 verification across 1-8 exact caller-owned `--scope` values and 1-8 canonical
 HTTPS `--source-url` values. One scope verifies that exact latest tuple and
 requires `--as-of`; 2-8 scopes additionally select the unique newest member of
@@ -184,8 +205,8 @@ The repository includes
 which teaches an agent when to search, extract, map, crawl, or escalate to a
 multi-source report. The separate
 [`opencode-agy-search`](https://github.com/happycastle114/opencode-agy-search)
-plugin bundles the skill, registers it with OpenCode, and forwards the documented
-executable override while invoking this same binary.
+plugin bundles the skill and registers first-class `agy_search`, `agy_research`,
+`agy_extract`, `agy_map`, and `agy_crawl` tools while invoking this same binary.
 
 The skill saves potentially large responses under `.agy-search/` and reads only
 the needed fields, limiting context use without losing citation URLs.
@@ -266,15 +287,32 @@ identifiers, or tool payloads.
   at 2 MiB under the same deadline and redirect policy.
   Google search, transport, and cache origins are never public sources. A
   failed or unsafe row is removed with its audit row; if no publishable result
-  survives, standard search may use up to two bounded recovery attempts. Each
+  survives, or AGY emits a balanced failed web-tool call, standard search may
+  discard that whole run and use up to two bounded recovery attempts. Each
   redirect hop is parsed, public-address validated,
   and pinned before the next request.
 - Counts every attempted built-in `search_web` or `read_url_content` lifecycle
   toward the budget and requires all started calls to complete successfully.
 - Rejects generic MCP calls and merely started tools as provenance.
-- Runs content work in an exact `tempfile`-owned directory.
-- Never passes `--dangerously-skip-permissions` or automates login.
+- Runs content work in an exact `tempfile`-owned directory with a generated
+  custom agent whose only tools are `search_web`, `read_url_content`,
+  `view_file`, and `grep_search`; command execution, subagents, MCP inheritance,
+  and slash commands are disabled.
+- Passes headless `--dangerously-skip-permissions` only inside that isolated,
+  explicitly tool-scoped custom agent so required web reads cannot become soft
+  permission denials. Event validation still rejects every unlisted tool
+  attempt and requires every retained Research URL to match a completed read
+  call. It never changes global Antigravity permissions or automates login.
 - Treats fetched pages as untrusted data in the research prompt.
+- Re-fetches Standard Research sources with DNS-pinned redirect handling,
+  requires each exact audit value in the same-URL visible body, and publishes a
+  locally sliced body context instead of the model-written source snippet. A
+  mismatched exact value, dead link, unretained source, or wrong citation fails
+  the whole response instead of being published.
+- Prefetches exact Extract URLs with the same DNS-pinned boundary, gives the
+  isolated worker only bounded query-relevant windows, and deterministically
+  projects final content from the fetched body. Model-written nested schemas,
+  paraphrases, and unsupported claims cannot cross the stdout boundary.
 
 The CLI validates provenance structure, declared-set coverage, source-body
 binding, schemes, bounds, and citation membership. Standard mode remains a fast,
@@ -294,10 +332,10 @@ and label its candidates unverified.
 
 `date` means an explicitly exposed publication or release date.
 `last_updated` means a separately exposed modification or update date. Missing
-publication/release dates stay `null`. Standard Search also downgrades an exact
-date to `null` when the returned same-URL evidence does not bind its complete
-source date text; it preserves the source result instead of exposing unsupported
-metadata. Malformed dates still fail, and Standard Research remains strict. The
+publication/release dates stay `null`. Standard Search and Standard Research
+downgrade an exact date to `null` when returned same-URL evidence does not bind
+its complete source date text; they preserve the source instead of exposing
+unsupported metadata. Malformed dates still fail. The
 CLI never substitutes execution, crawl, fetch, query, or cutoff time, infers a
 date, or copies one meaning into the other. Temporal comparison instead requires
 strict ISO dates for every ordered candidate and rejects missing or null dates
@@ -319,6 +357,27 @@ usage. Run the complete discovery plus five-operation gate explicitly:
 
 ```bash
 AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
-AGY_SEARCH_REAL_MODEL=gemini-3.6-flash-low \
+AGY_SEARCH_REAL_MODEL=gemini-3.7-flash-low \
 cargo test --test real_antigravity --locked -- --ignored --nocapture
+```
+
+Before a production release, also run the unpinned quality gate. It exercises
+the normal model policy, rejects origin-only/search-wrapper citations, requires
+four claim-specific official Research sources, locally binds each exact value,
+source snippet, finding summary, and report summary to the same terminal pages,
+extracts every returned page again, and checks the source bodies for the
+requested facts:
+
+```bash
+AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
+cargo test --test production_quality_gate --locked -- --ignored --nocapture
+```
+
+Run the independent current-affairs comparison gate as well. It checks the
+current Bank of Korea policy rate, the latest stable Rust release, and a recent
+WHO report against exact official URLs, dates, and page-body markers:
+
+```bash
+AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
+cargo test --test current_affairs_quality_gate --locked -- --ignored --nocapture
 ```

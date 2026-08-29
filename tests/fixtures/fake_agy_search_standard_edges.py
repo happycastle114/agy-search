@@ -41,8 +41,11 @@ def run_standard_edge_scenario(query: str, emit: Emitter) -> int | None:
                                 "claim": "Published on 2026-08-06",
                                 "url": url,
                                 "date": "2026-08-06",
+                                "value": "게시일 2026년 8월 6일",
                                 "source_date_text": "2026년 8월 6일",
-                                "evidence_excerpt": "게시일 2026년 8월 6일",
+                                "evidence_excerpt": (
+                                    "게시일 2026년 8월 6일 공식 출처 본문 근거입니다."
+                                ),
                             }
                         ],
                         "coverage_complete": True,
@@ -72,6 +75,7 @@ def run_standard_edge_scenario(query: str, emit: Emitter) -> int | None:
             | "grounding-all-dead-then-mixed"
             | "standard-unlisted-tool-retry"
             | "standard-unlisted-tool-invalid-audit"
+            | "standard-failed-web-tool-retry"
             | "standard-non-source-first"
         ):
             invocation = _invocation_count()
@@ -87,6 +91,7 @@ def run_standard_edge_scenario(query: str, emit: Emitter) -> int | None:
                 "grounding-two-results",
                 "grounding-all-dead-then-mixed",
                 "standard-unlisted-tool-retry",
+                "standard-failed-web-tool-retry",
             } or (
                 query == "standard-audit-retry" and invocation > 1
             )
@@ -130,6 +135,10 @@ def _emit_two_source_result(
             "claim": "Primary evidence",
             "url": urls[0],
             "date": None,
+            "value": "Primary evidence",
+            "evidence_excerpt": (
+                "Primary source contains Primary evidence from verified body."
+            ),
         }
     ]
     if complete:
@@ -139,6 +148,10 @@ def _emit_two_source_result(
                 "claim": "Secondary evidence",
                 "url": urls[1],
                 "date": None,
+                "value": "Secondary evidence",
+                "evidence_excerpt": (
+                    "Secondary source contains Secondary evidence from verified body."
+                ),
             }
         )
     unlisted_tool = (
@@ -162,6 +175,11 @@ def _emit_two_source_result(
         1,
         query,
         additional_tool=unlisted_tool,
+        failed_tool_before=(
+            "search_web"
+            if query == "standard-failed-web-tool-retry" and invocation == 1
+            else None
+        ),
     )
 
 
@@ -236,8 +254,13 @@ def _emit_non_source_retry_result(query: str, emit: Emitter, invocation: int) ->
                         "claim": "Market evidence",
                         "url": url,
                         "date": None,
+                        "value": "Market evidence",
                         "source_date_text": "2026년 8월 6일" if first else None,
-                        "evidence_excerpt": "2026년 8월 6일 시장" if first else None,
+                        "evidence_excerpt": (
+                            "2026년 8월 6일 Market source contains Market evidence."
+                            if first
+                            else "Market source contains Market evidence from verified body."
+                        ),
                     }
                 ],
                 "coverage_complete": True,
@@ -298,6 +321,10 @@ def _emit_direct_source_result(
             "claim": f"Direct evidence {index}",
             "url": url,
             "date": None,
+            "value": f"Direct evidence {index}",
+            "evidence_excerpt": (
+                f"Direct source {index} contains Direct evidence {index} from verified body."
+            ),
         }
         for index, url in enumerate(urls)
     ]

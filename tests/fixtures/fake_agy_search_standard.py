@@ -163,20 +163,43 @@ def run_search(
             "claim": query,
             "url": url,
             "date": source.get("date"),
+            "value": "Verified generic search evidence",
+            "evidence_excerpt": (
+                "Verified generic search evidence appears in this deterministic source body."
+            ),
         },
         {
             "scope": "corroborating fixture",
             "claim": query,
             "url": url,
             "date": source.get("date"),
+            "value": "Verified generic search evidence",
+            "evidence_excerpt": (
+                "Verified generic search evidence appears in this deterministic source body."
+            ),
         },
     ]
+    source["title"] = "Verified generic search evidence"
+    if query == "fixture":
+        verified_identity = "Verified source body contains Evidence"
+        source["title"] = verified_identity
+        for candidate in candidates:
+            candidate["value"] = verified_identity
+            candidate["evidence_excerpt"] = (
+                f"{verified_identity} as exact supported fixture evidence."
+            )
     if query in public_date_scenarios:
         candidates[0]["source_date_text"] = source_date_text
-        candidates[0]["evidence_excerpt"] = f"Published {source_date_text}"
+        candidates[0]["evidence_excerpt"] = (
+            "Verified generic search evidence appears in this deterministic source body. "
+            f"Published {source_date_text}"
+        )
     elif query in {"explicit-date", "explicit-update"}:
         candidates[0]["source_date_text"] = "2026-08-03"
-        candidates[0]["evidence_excerpt"] = "Published 2026-08-03"
+        candidates[0]["evidence_excerpt"] = (
+            "Verified generic search evidence appears in this deterministic source body. "
+            "Published 2026-08-03"
+        )
     if query == "temporal-incomplete":
         candidates = candidates[:1]
     temporal_queries = {

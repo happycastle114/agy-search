@@ -8,7 +8,7 @@ mod policy;
 mod query;
 mod scalar;
 
-pub(crate) use model::{Effort, ModelCatalog, ModelSlug, PreferredSearchModel};
+pub(crate) use model::{Effort, GeminiFlashGeneration, ModelCatalog, ModelSlug, PreferredModel};
 pub(crate) use policy::{
     DatePolicy, Operation, ResearchAttemptBudget, ResearchToolBudget, ResearchToolPolicy,
     ScopePolicy, SourcePolicy, VerificationMode,

@@ -36,7 +36,9 @@ impl GeneratedContentRoot {
                 self.content_path(conversation_id, producer) == path
                     || self.step_path(conversation_id, producer) == path
             }
-            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Other => false,
+            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Finish | ToolName::Other => {
+                false
+            }
         }
     }
 

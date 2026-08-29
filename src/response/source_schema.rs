@@ -68,6 +68,7 @@ pub(super) fn narrow_source_urls(
             "pattern": format!(r"^https?://(?:[A-Za-z0-9-]+\.)*{escaped}(?::[0-9]+)?(?:[/?#]|$)")
         })
     }));
+    alternatives.push(json!({"pattern": GROUNDING_TRANSPORT_PATTERN}));
     let mut narrowed = 0;
     for pointer in [
         "/$defs/WebSource/properties/url",
@@ -125,6 +126,13 @@ mod tests {
                 .iter()
                 .filter_map(|value| value.get("pattern").and_then(Value::as_str))
                 .any(|pattern| pattern.contains("rust-lang\\.org"))
+        );
+        assert!(
+            alternatives
+                .iter()
+                .filter_map(|value| value.get("pattern").and_then(Value::as_str))
+                .any(|pattern| pattern == GROUNDING_TRANSPORT_PATTERN),
+            "restricted output must admit a copied grounding transport for safe runtime resolution"
         );
     }
 }

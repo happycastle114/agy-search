@@ -51,10 +51,13 @@ fn standard_search_downgrades_an_unbound_day_to_null() {
 }
 
 #[test]
-fn standard_research_rejects_an_invented_day_bound_to_month_only_source_text() {
+fn standard_research_downgrades_an_unbound_day_to_null() {
     // Given: a standard Research source whose public day is absent from its audit text.
-    // When/Then: the public CLI rejects the response with its stable output-invalid code.
-    assert_invalid("research", "standard-date-month-only");
+    // When: the otherwise valid response crosses the public CLI boundary.
+    let source = public_source("research", "standard-date-month-only");
+
+    // Then: the source survives without exposing an invented exact day.
+    assert_eq!(source.get("date"), Some(&Value::Null));
 }
 
 #[test]

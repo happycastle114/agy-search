@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use thiserror::Error;
-use tokio::{task::JoinSet, time::Instant};
+use tokio::time::Instant;
 
 use crate::{
     source_document::{CandidateBinding, SourceDocument, SourceDocumentError},
@@ -31,8 +31,6 @@ pub(crate) enum SourceContractError {
     Document(#[from] SourceDocumentError),
     #[error("candidate source was outside the caller allowlist")]
     SourceNotAllowed,
-    #[error("source fetch task failed")]
-    TaskFailed,
 }
 
 impl SourceContract {
@@ -45,34 +43,12 @@ impl SourceContract {
         if sources.is_empty() || unique.len() != sources.len() {
             return Err(SourceContractError::InvalidAllowlist);
         }
-        let mut documents = Vec::with_capacity(sources.len());
-        for batch in sources.chunks(4) {
-            let mut tasks = JoinSet::new();
-            for (index, source) in batch.iter().enumerate() {
-                let owned_fetcher = fetcher.clone();
-                let owned_source = source.clone();
-                tasks.spawn(
-                    async move { (index, owned_fetcher.fetch(&owned_source, deadline).await) },
-                );
-            }
-            let mut completed = std::collections::BTreeMap::new();
-            let mut task_failed = false;
-            while let Some(result) = tasks.join_next().await {
-                match result {
-                    Ok((index, response)) => {
-                        completed.insert(index, response);
-                    }
-                    Err(_) => task_failed = true,
-                }
-            }
-            if task_failed || completed.len() != batch.len() {
-                return Err(SourceContractError::TaskFailed);
-            }
-            for response in completed.into_values() {
-                let response = response?;
-                documents.push(SourceDocument::parse(response)?);
-            }
-        }
+        let documents = fetcher
+            .fetch_many(sources, deadline)
+            .await?
+            .into_iter()
+            .map(SourceDocument::parse)
+            .collect::<Result<Vec<_>, _>>()?;
         Self::from_documents(documents)
     }
 

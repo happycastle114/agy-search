@@ -44,6 +44,7 @@ pub(super) enum ToolName {
     ReadUrlContent,
     ViewFile,
     GrepSearch,
+    Finish,
     #[serde(other)]
     Other,
 }

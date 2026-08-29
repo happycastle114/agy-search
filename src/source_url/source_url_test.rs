@@ -21,6 +21,19 @@ fn known_google_transport_and_wrapper_urls_are_never_direct() {
 }
 
 #[test]
+fn official_google_publisher_pages_are_direct_sources() {
+    for value in [
+        "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-3-7-flash/",
+        "https://deepmind.google/models/model-cards/gemini-3-7-flash/",
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash",
+        "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+    ] {
+        let url = HttpUrl::parse(value).expect("official Google source URL must parse");
+        assert_eq!(url.source_kind(), SourceUrlKind::Direct, "URL: {value}");
+    }
+}
+
+#[test]
 fn known_news_portal_syndication_urls_are_direct_sources_with_portal_identity() {
     for value in [
         "https://v.daum.net/v/20260807120301584",
@@ -42,6 +55,10 @@ fn generic_site_landing_paths_are_not_search_evidence_pages() {
         "https://example.com/main/main.jsp",
         "https://example.com/report/index.html",
         "https://example.com/home.php?locale=ko",
+        "https://example.com/news-room",
+        "https://example.com/news/headlines/",
+        "https://example.com/releases",
+        "https://example.com/portal/main/contents.do?menu=7",
     ] {
         let url = HttpUrl::parse(value).expect("site landing URL must parse");
         assert!(url.is_site_root(), "URL: {value}");
@@ -49,6 +66,13 @@ fn generic_site_landing_paths_are_not_search_evidence_pages() {
     let article = HttpUrl::parse("https://example.com/news/article.html?id=7")
         .expect("article URL must parse");
     assert!(!article.is_site_root());
+    let data_list = HttpUrl::parse("https://example.com/portal/base-rate/list.do?menu=7")
+        .expect("structured data URL must parse");
+    assert!(!data_list.is_site_root());
+    let latest = HttpUrl::parse("https://example.com/releases/latest/")
+        .expect("documented latest URL must parse");
+    assert!(latest.is_site_root());
+    assert!(latest.is_latest_landing());
 }
 
 proptest! {

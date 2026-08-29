@@ -88,7 +88,7 @@ fn explicit_model_keeps_two_bounded_recoveries() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
-fn provider_default_keeps_two_bounded_recoveries() -> Result<(), Box<dyn std::error::Error>> {
+fn quality_model_keeps_two_bounded_recoveries() -> Result<(), Box<dyn std::error::Error>> {
     let temporary = TempDir::new()?;
     let trace = temporary.path().join("invocations.jsonl");
 
@@ -100,9 +100,10 @@ fn provider_default_keeps_two_bounded_recoveries() -> Result<(), Box<dyn std::er
 
     let expected = vec![
         serde_json::json!({"kind":"version","model":null,"effort":null}),
-        serde_json::json!({"kind":"content","model":null,"effort":"medium"}),
-        serde_json::json!({"kind":"content","model":null,"effort":"medium"}),
-        serde_json::json!({"kind":"content","model":null,"effort":"medium"}),
+        serde_json::json!({"kind":"models","model":null,"effort":null}),
+        serde_json::json!({"kind":"content","model":QUALITY_MEDIUM_MODEL,"effort":"medium"}),
+        serde_json::json!({"kind":"content","model":QUALITY_MEDIUM_MODEL,"effort":"medium"}),
+        serde_json::json!({"kind":"content","model":QUALITY_MEDIUM_MODEL,"effort":"medium"}),
     ];
     assert_eq!(trace_records(&trace)?, expected);
     Ok(())

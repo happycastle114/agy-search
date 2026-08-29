@@ -201,7 +201,7 @@ fn validate_source_restriction<'a>(
     restriction: &SourceRestriction,
     mut urls: impl Iterator<Item = &'a HttpUrl>,
 ) -> Result<(), AgyError> {
-    if urls.all(|url| restriction.allows(url)) {
+    if urls.all(|url| restriction.allows_evidence_url(url)) {
         Ok(())
     } else {
         Err(AgyError::OutputInvalid)

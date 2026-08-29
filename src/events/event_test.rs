@@ -8,6 +8,12 @@ fn standard_policy() -> ResearchToolPolicy {
     ResearchToolPolicy::Budget(ResearchToolBudget::StandardSearch)
 }
 
+fn research_policy() -> ResearchToolPolicy {
+    ResearchToolPolicy::Budget(ResearchToolBudget::Research(
+        ResearchAttemptBudget::from_max_sources(2),
+    ))
+}
+
 fn scoped_policy() -> ResearchToolPolicy {
     let query = NonEmptyText::parse("release status").expect("test query must be valid");
     ResearchToolPolicy::ScopedTemporalSearch(RequiredSearchQuery::for_exact_scope(
@@ -72,6 +78,73 @@ fn restricted_research_rejects_an_unpaired_exact_url_read_without_search() {
 
     // Then: a direct read is evidence only after its matching ACTIVE event.
     assert!(parsed.is_err());
+}
+
+#[test]
+fn research_requires_a_completed_read_for_every_retained_source() {
+    // Given: discovery and one successful read, but two retained sources.
+    let stream = br#"{"event":"init","conversation_id":"current-conversation"}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","state":"DONE","step_type":"tool","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","state":"ACTIVE","step_type":"tool","tool_info":{"name":"read_url_content","parameters":{"Url":"https://example.com/first"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","state":"DONE","step_type":"tool","tool_info":{"name":"read_url_content","parameters":{"Url":"https://example.com/first"}}}}
+{"event":"result","result":{"structured_output":{"object":"research","evidence_audit":{"candidates":[{"scope":"first","claim":"First","url":"https://example.com/first","date":null},{"scope":"second","claim":"Second","url":"https://example.com/second","date":null}],"coverage_complete":true,"conclusion":"Evidence"},"title":"Research","summary":"Evidence","findings":[{"title":"Finding","summary":"Evidence","citations":["https://example.com/first","https://example.com/second"]}],"sources":[{"title":"First","url":"https://example.com/first","snippet":"Evidence"},{"title":"Second","url":"https://example.com/second","snippet":"Evidence"}]}}}"#;
+
+    let parsed = parse_structured_run(stream, Operation::Research, &research_policy());
+
+    assert!(parsed.is_err());
+}
+
+#[test]
+fn balanced_failed_finish_allows_a_valid_corrected_terminal_result() {
+    // Given: AGY rejects one invalid structured-output attempt before the model corrects it.
+    let stream = br#"{"event":"init","conversation_id":"current-conversation"}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":1,"state":"ACTIVE","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":1,"state":"DONE","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"finish","tool_info":{"name":"finish","parameters":{"unexpected":true}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":2,"state":"ERROR","step_type":"tool","tool_name":"finish","tool_info":{"name":"finish","parameters":{"unexpected":true},"error":{"type":"TOOL_ERROR","message":"invalid arguments"}}}}
+{"event":"result","result":{"status":"SUCCESS","structured_output":{"object":"search","evidence_audit":{"candidates":[{"scope":"primary","claim":"Evidence","url":"https://example.com/page","date":null}],"coverage_complete":true,"conclusion":"Evidence"},"results":[{"title":"Source","url":"https://example.com/page","snippet":"Evidence"}]}}}"#;
+
+    let parsed = parse_structured_run(stream, Operation::Search, &standard_policy());
+
+    assert!(parsed.is_ok());
+}
+
+#[test]
+fn balanced_failed_web_tool_is_recoverable_only_for_standard_search() {
+    let stream = br#"{"event":"init","conversation_id":"current-conversation"}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":1,"state":"ACTIVE","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web"}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":1,"state":"ERROR","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web","error":{"type":"TOOL_ERROR","message":"invalid arguments"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":2,"state":"DONE","step_type":"tool","tool_name":"search_web","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"result","result":{"status":"SUCCESS","structured_output":{"object":"search","evidence_audit":{"candidates":[{"scope":"primary","claim":"Evidence","url":"https://example.com/page","date":null}],"coverage_complete":true,"conclusion":"Evidence"},"results":[{"title":"Source","url":"https://example.com/page","snippet":"Evidence"}]}}}"#;
+
+    let search = parse_structured_run(stream, Operation::Search, &standard_policy());
+    assert!(matches!(
+        search,
+        Err(StructuredRunError::RecoverableFailedWebTool(_))
+    ));
+
+    let research = parse_structured_run(stream, Operation::Research, &research_policy());
+    assert!(matches!(research, Err(StructuredRunError::Invalid(_))));
+}
+
+#[test]
+fn terminal_result_closes_one_current_finish_but_rejects_a_foreign_finish() {
+    let stream = br#"{"event":"init","conversation_id":"current-conversation"}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":1,"state":"DONE","step_type":"tool","tool_info":{"name":"search_web","parameters":{"query":"evidence"}}}}
+{"event":"step_update","step_update":{"conversation_id":"current-conversation","step_index":2,"state":"ACTIVE","step_type":"tool","tool_info":{"name":"finish"}}}
+{"event":"result","result":{"status":"SUCCESS","structured_output":{"object":"search","evidence_audit":{"candidates":[{"scope":"primary","claim":"Evidence","url":"https://example.com/page","date":null}],"coverage_complete":true,"conclusion":"Evidence"},"results":[{"title":"Source","url":"https://example.com/page","snippet":"Evidence"}]}}}"#;
+    assert!(parse_structured_run(stream, Operation::Search, &standard_policy()).is_ok());
+
+    let foreign = std::str::from_utf8(stream)
+        .expect("test stream must be UTF-8")
+        .replace(
+            r#"conversation_id":"current-conversation","step_index":2"#,
+            r#"conversation_id":"foreign-conversation","step_index":2"#,
+        );
+    assert!(
+        parse_structured_run(foreign.as_bytes(), Operation::Search, &standard_policy()).is_err()
+    );
 }
 
 #[test]

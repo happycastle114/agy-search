@@ -113,11 +113,12 @@ fn policy_spellings_and_maxima_remain_closed() {
     );
 
     assert_eq!(ResearchToolBudget::Single.maximum(), 1);
+    assert_eq!(ResearchToolBudget::DirectReads(4).maximum(), 4);
     assert_eq!(ResearchToolBudget::StandardSearch.maximum(), 2);
     assert_eq!(ResearchToolBudget::TemporalSearch.maximum(), 8);
     assert_eq!(
         ResearchToolBudget::Research(ResearchAttemptBudget::from_max_sources(4)).maximum(),
-        6
+        9
     );
 
     let query = NonEmptyText::parse("release status").expect("test query must be valid");
@@ -147,9 +148,9 @@ fn policy_spellings_and_maxima_remain_closed() {
 #[test]
 fn research_attempt_budget_adds_bounded_discovery_and_verification_overhead() {
     // Given source limits at the lower, synthesis, deep, default, and upper boundaries.
-    let cases = [(0, 2), (1, 3), (4, 6), (8, 10), (10, 12), (20, 12)];
+    let cases = [(0, 1), (1, 3), (4, 9), (5, 11), (6, 12), (20, 12)];
 
-    // When/Then the typed budget adds two attempts and never exceeds twelve.
+    // When/Then the typed budget funds discovery plus search/read pairs and caps at twelve.
     for (max_sources, expected) in cases {
         assert_eq!(
             ResearchAttemptBudget::from_max_sources(max_sources).maximum(),

@@ -27,6 +27,31 @@ fn search_schema_requires_internal_evidence_audit() {
 }
 
 #[test]
+fn standard_research_schema_requires_non_null_excerpt_and_value() {
+    let schema = ResponseDocument::schema(
+        Operation::Research,
+        VerificationMode::Standard,
+        None,
+        &SourceRestriction::Unrestricted,
+        None,
+    )
+    .expect("standard Research schema must render");
+    let document: Value = serde_json::from_str(&schema).expect("schema must be JSON");
+    let required = document
+        .pointer("/$defs/ScopeEvidence/required")
+        .and_then(Value::as_array)
+        .expect("candidate required fields must exist");
+
+    for field in ["evidence_excerpt", "value"] {
+        assert!(required.iter().any(|required| required == field));
+        assert_eq!(
+            document.pointer(&format!("/$defs/ScopeEvidence/properties/{field}/type")),
+            Some(&Value::from("string"))
+        );
+    }
+}
+
+#[test]
 fn search_schema_rejects_empty_evidence_text_before_deserialization() {
     // Given: the schema used by a standard Search model call.
     let schema = ResponseDocument::schema(

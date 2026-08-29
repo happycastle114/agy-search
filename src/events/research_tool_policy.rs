@@ -17,6 +17,7 @@ pub(super) use scoped_search::attempts_are_valid as scoped_search_attempts_are_v
 pub(super) enum EvidencePolicyAssessment {
     Satisfied,
     RecoverableUnlistedTool,
+    RecoverableFailedWebTool,
     Rejected,
 }
 
@@ -35,6 +36,13 @@ pub(super) fn assess_evidence_policy(
     let tool_assessment = generated_content_policy::assess_tool_attempts(events);
     if tool_assessment == ToolAttemptAssessment::Unsafe {
         return EvidencePolicyAssessment::Rejected;
+    }
+    match failed_web_tool_attempts(events) {
+        Some(true) if operation == Operation::Search => {
+            return EvidencePolicyAssessment::RecoverableFailedWebTool;
+        }
+        Some(true) | None => return EvidencePolicyAssessment::Rejected,
+        Some(false) => {}
     }
     let Some(attempt_count) = completed_research_attempt_count(events) else {
         return EvidencePolicyAssessment::Rejected;
@@ -71,6 +79,62 @@ pub(super) fn assess_evidence_policy(
         EvidencePolicyAssessment::RecoverableUnlistedTool
     } else {
         EvidencePolicyAssessment::Satisfied
+    }
+}
+
+fn failed_web_tool_attempts(events: &[Event]) -> Option<bool> {
+    let current = events
+        .iter()
+        .find(|event| event.kind == EventName::Init)?
+        .conversation_id
+        .as_ref()?;
+    let mut active = Vec::new();
+    let mut saw_failure = false;
+    for event in events {
+        let Some(step) = event
+            .step_update
+            .as_ref()
+            .filter(|step| step.step_type == StepType::Tool)
+        else {
+            continue;
+        };
+        let info = step.tool_info.as_ref()?;
+        if !info.name.is_web_evidence() {
+            continue;
+        }
+        if step.conversation_id.as_ref() != Some(current) {
+            return None;
+        }
+        let identity = AttemptIdentity {
+            step_index: step.step_index,
+            tool: info.name,
+            parameters: info.parameters.as_ref(),
+        };
+        match step.state {
+            Some(StepState::Active) if info.error.is_none() => {
+                if active.contains(&identity) {
+                    return None;
+                }
+                active.push(identity);
+            }
+            Some(StepState::Done) if info.error.is_none() => {
+                if let Some(position) = active.iter().position(|attempt| *attempt == identity) {
+                    active.remove(position);
+                }
+            }
+            Some(StepState::Error) if info.error.is_some() => {
+                let position = active.iter().position(|attempt| *attempt == identity)?;
+                active.remove(position);
+                saw_failure = true;
+            }
+            Some(StepState::Active | StepState::Done | StepState::Error | StepState::Other)
+            | None => return None,
+        }
+    }
+    if saw_failure && !active.is_empty() {
+        None
+    } else {
+        Some(saw_failure)
     }
 }
 

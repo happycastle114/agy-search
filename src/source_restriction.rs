@@ -104,6 +104,13 @@ impl SourceRestriction {
         }
     }
 
+    pub(crate) fn exact_urls(&self) -> &[HttpUrl] {
+        match self {
+            Self::Unrestricted => &[],
+            Self::Allowlist { domains: _, urls } => urls,
+        }
+    }
+
     pub(crate) const fn has_exact_urls(&self) -> bool {
         match self {
             Self::Unrestricted => false,
@@ -124,6 +131,15 @@ impl SourceRestriction {
                         })
             }
         }
+    }
+
+    pub(crate) fn allows_evidence_url(&self, source: &HttpUrl) -> bool {
+        self.allows(source)
+            && (!source.is_site_root()
+                || matches!(
+                    self,
+                    Self::Allowlist { domains: _, urls } if urls.contains(source)
+                ))
     }
 
     pub(crate) fn allows_search_query(&self, query: &str) -> bool {
@@ -217,6 +233,22 @@ mod tests {
             !restriction
                 .allows(&HttpUrl::parse("https://example.com/exact?q=2").expect("valid URL"))
         );
+    }
+
+    #[test]
+    fn bare_origins_are_evidence_only_when_the_caller_lists_the_exact_url() {
+        let root = HttpUrl::parse("https://rust-lang.org/").expect("valid URL");
+        let domain_only = SourceRestriction::parse(
+            vec![SourceDomain::from_str("rust-lang.org").expect("valid domain")],
+            Vec::new(),
+        )
+        .expect("valid restriction");
+        let exact_root =
+            SourceRestriction::parse(Vec::new(), vec![root.clone()]).expect("valid restriction");
+
+        assert!(!SourceRestriction::Unrestricted.allows_evidence_url(&root));
+        assert!(!domain_only.allows_evidence_url(&root));
+        assert!(exact_root.allows_evidence_url(&root));
     }
 
     #[test]

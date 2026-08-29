@@ -29,6 +29,7 @@ pub(super) struct AttemptState {
     active_reads: HashMap<StepIndex, ReadAttempt>,
     completed_reads: Vec<(ConversationId, StepIndex)>,
     active_inspections: HashMap<StepIndex, InspectionAttempt>,
+    active_finishes: HashMap<StepIndex, ConversationId>,
 }
 
 #[derive(Clone, Copy)]
@@ -90,8 +91,40 @@ impl AttemptState {
         }
     }
 
+    pub(super) fn track_finish(
+        &mut self,
+        tool_step: ToolStep<'_>,
+        current: &ConversationId,
+    ) -> bool {
+        let Some(index) = tool_step.step.step_index else {
+            return false;
+        };
+        let Some(conversation) = tool_step.step.conversation_id.as_ref() else {
+            return false;
+        };
+        if conversation != current {
+            return false;
+        }
+        match tool_step.step.state {
+            Some(StepState::Active) if tool_step.info.error.is_none() => self
+                .active_finishes
+                .insert(index, conversation.clone())
+                .is_none(),
+            Some(StepState::Done) if tool_step.info.error.is_none() => {
+                self.active_finishes.remove(&index).as_ref() == Some(conversation)
+            }
+            Some(StepState::Error) if tool_step.info.error.is_some() => {
+                self.active_finishes.remove(&index).as_ref() == Some(conversation)
+            }
+            Some(StepState::Active | StepState::Done | StepState::Error | StepState::Other)
+            | None => false,
+        }
+    }
+
     pub(super) fn has_balanced_attempts(&self) -> bool {
-        self.active_reads.is_empty() && self.active_inspections.is_empty()
+        self.active_reads.is_empty()
+            && self.active_inspections.is_empty()
+            && self.active_finishes.len() <= 1
     }
 
     fn inspection_attempt(
@@ -108,7 +141,9 @@ impl AttemptState {
         let path = match tool_step.info.name {
             ToolName::ViewFile => parameters.absolute_path.clone()?,
             ToolName::GrepSearch => parameters.search_path.clone()?,
-            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Other => return None,
+            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Finish | ToolName::Other => {
+                return None;
+            }
         };
         let producer = self.completed_reads.iter().find_map(|(owner, producer)| {
             (owner == context.current
@@ -124,7 +159,9 @@ impl AttemptState {
         let query = match tool_step.info.name {
             ToolName::GrepSearch => parameters.query.clone(),
             ToolName::ViewFile => None,
-            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Other => return None,
+            ToolName::SearchWeb | ToolName::ReadUrlContent | ToolName::Finish | ToolName::Other => {
+                return None;
+            }
         };
         Some((
             index,

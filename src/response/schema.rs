@@ -32,8 +32,41 @@ pub(super) fn render(
             search_result_limit.ok_or(AgyError::InvalidCommand)?,
         )?;
     }
+    if operation == Operation::Research && verification == VerificationMode::Standard {
+        require_standard_research_evidence(&mut schema)?;
+    }
     require_verification_schema(&mut schema, operation, verification, temporal_contract)?;
     serde_json::to_string(&schema).map_err(|_| AgyError::InvalidCommand)
+}
+
+fn require_standard_research_evidence(schema: &mut serde_json::Value) -> Result<(), AgyError> {
+    let candidate = schema
+        .pointer_mut("/$defs/ScopeEvidence")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    let required = candidate
+        .get_mut("required")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    for field in ["evidence_excerpt", "value"] {
+        let field = serde_json::Value::from(field);
+        if !required.contains(&field) {
+            required.push(field);
+        }
+    }
+    let properties = candidate
+        .get_mut("properties")
+        .and_then(serde_json::Value::as_object_mut)
+        .ok_or(AgyError::InvalidCommand)?;
+    for field in ["evidence_excerpt", "value"] {
+        let property = properties
+            .get_mut(field)
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or(AgyError::InvalidCommand)?;
+        property.insert("type".to_owned(), serde_json::Value::from("string"));
+        property.remove("default");
+    }
+    Ok(())
 }
 
 fn operation_schema(operation: Operation) -> Result<serde_json::Value, AgyError> {

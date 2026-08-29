@@ -2,6 +2,29 @@
 
 use crate::source_document_html::{HtmlStructureError, normalize_text};
 
+pub(crate) fn document_title(html: &str) -> Result<Option<String>, HtmlStructureError> {
+    let lowercase = html.to_ascii_lowercase();
+    let Some(open_at) = lowercase.find("<title") else {
+        return Ok(None);
+    };
+    let open_end = lowercase
+        .get(open_at..)
+        .and_then(|tail| tail.find('>'))
+        .map(|offset| open_at + offset)
+        .ok_or(HtmlStructureError)?;
+    let content_start = open_end + 1;
+    let content_end = lowercase
+        .get(content_start..)
+        .and_then(|tail| tail.find("</title"))
+        .map(|offset| content_start + offset)
+        .ok_or(HtmlStructureError)?;
+    let title = normalize_text(
+        html.get(content_start..content_end)
+            .ok_or(HtmlStructureError)?,
+    );
+    Ok((!title.is_empty()).then_some(title))
+}
+
 pub(crate) fn heading_sections(html: &str) -> Result<Vec<(String, String)>, HtmlStructureError> {
     let mut headings = Vec::new();
     let mut cursor = 0;
@@ -62,4 +85,21 @@ fn matching_close(
         .map(|offset| close_at + offset + 1)
         .ok_or(HtmlStructureError)?;
     Ok((close_at, close_end))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_a_case_insensitive_document_title() {
+        let html = "<html><head><TITLE> Release 1.0 &amp; notes | Example </TITLE></head></html>";
+
+        assert_eq!(
+            document_title(html)
+                .expect("title HTML must parse")
+                .as_deref(),
+            Some("Release 1.0 & notes | Example")
+        );
+    }
 }

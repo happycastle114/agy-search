@@ -106,6 +106,25 @@ fn retries_once_after_an_unlisted_tool_invalidates_the_primary_run()
 }
 
 #[test]
+fn retries_once_after_a_balanced_failed_web_tool_attempt() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Given: AGY first emits a balanced invalid-arguments search attempt.
+    let temporary = tempfile::tempdir()?;
+    let (mut command, trace) = traced_command(&temporary);
+
+    // When: a clean bounded recovery run is available.
+    command
+        .args(["search", "standard-failed-web-tool-retry"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    // Then: no mixed-error result is published and exactly one retry is used.
+    assert_eq!(invocation_count(&trace)?, 2);
+    Ok(())
+}
+
+#[test]
 fn does_not_mask_an_invalid_audit_with_an_unlisted_tool() -> Result<(), Box<dyn std::error::Error>>
 {
     // Given: one run contains both a foreign tool and incomplete same-URL audit coverage.

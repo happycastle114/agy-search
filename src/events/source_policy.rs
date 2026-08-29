@@ -3,9 +3,32 @@
 use std::collections::HashSet;
 
 use crate::{
+    response::Document as ResponseDocument,
     source_restriction::SourceRestriction,
     types::{HttpUrl, ResearchToolPolicy, SourceUrlKind},
 };
+
+pub(super) fn research_sources_were_read(events: &[Event], response: &ResponseDocument) -> bool {
+    let ResponseDocument::Research(research) = response else {
+        return false;
+    };
+    let completed_reads = events
+        .iter()
+        .filter(|event| event.kind == EventName::StepUpdate)
+        .filter_map(|event| event.step_update.as_ref())
+        .filter(|step| step.step_type == StepType::Tool)
+        .filter(|step| step.state == Some(super::stream::StepState::Done))
+        .filter_map(|step| step.tool_info.as_ref())
+        .filter(|info| info.name == ToolName::ReadUrlContent && info.error.is_none())
+        .filter_map(|info| info.parameters.as_ref()?.url.as_deref())
+        .filter_map(|url| HttpUrl::parse(url).ok())
+        .collect::<HashSet<_>>();
+    !completed_reads.is_empty()
+        && research
+            .sources
+            .iter()
+            .all(|source| completed_reads.contains(&source.url))
+}
 
 use super::{
     GroundingRequirement,
@@ -42,7 +65,7 @@ pub(super) fn attempts_satisfy_restriction(
                         SourceUrlKind::GroundingRedirect => true,
                         SourceUrlKind::NonSource => false,
                     }),
-                ToolName::ViewFile | ToolName::GrepSearch => true,
+                ToolName::ViewFile | ToolName::GrepSearch | ToolName::Finish => true,
                 ToolName::Other => false,
             }
         })

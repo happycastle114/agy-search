@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 args = sys.argv[1:]
 mode = os.environ["AGY_REDIRECT_MODE"]
+source_fetch = any("AGY_SOURCE_META" in argument for argument in args)
 required_pairs = {
     "--noproxy": "*",
     "--proxy": "",
@@ -33,6 +34,18 @@ except (ValueError, IndexError):
 host = urlparse(url).hostname
 if host is None or not resolve.startswith(f"{host}:443:"):
     raise SystemExit(64)
+if source_fetch:
+    sys.stdout.write(
+        "<p>Direct source 0 contains Direct evidence 0 from verified body. "
+        "Direct source 1 contains Direct evidence 1 from verified body. "
+        "Primary source contains Primary evidence from verified body. "
+        "Secondary source contains Secondary evidence from verified body. "
+        "Market source contains Market evidence from verified body. "
+        "Verified generic search evidence appears in this deterministic source body. "
+        "게시일 2026년 8월 6일 공식 출처 본문 근거입니다.</p>"
+    )
+    sys.stdout.write("\nAGY_SOURCE_META:200:0\n")
+    raise SystemExit(0)
 initial = "/grounding-api-redirect/" in urlparse(url).path
 with open(os.environ["AGY_REDIRECT_TRACE"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps({"url": url, "argv": args}) + "\n")

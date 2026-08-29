@@ -16,17 +16,52 @@ pub(crate) fn parse(value: &str) -> Result<CalendarDate, &'static str> {
     {
         return parse_korean(normalized);
     }
+    if normalized.contains('.')
+        && normalized
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'.')
+    {
+        return parse_dotted(normalized);
+    }
     let parts: Vec<_> = normalized.split_ascii_whitespace().collect();
-    let [month, day, year] = parts.as_slice() else {
+    let [first, second, year] = parts.as_slice() else {
         return Err("source date must be ISO or an unambiguous English date");
     };
-    let month = EnglishMonth::parse(month).ok_or("source month was not recognized")?;
-    let day = day
-        .strip_suffix(',')
-        .and_then(|day| day.parse::<u8>().ok())
-        .ok_or("source day was invalid")?;
+    let (month, day) = match EnglishMonth::parse(first) {
+        Some(month) => (
+            month,
+            second
+                .strip_suffix(',')
+                .and_then(|day| day.parse::<u8>().ok())
+                .ok_or("source day was invalid")?,
+        ),
+        None => (
+            EnglishMonth::parse(second).ok_or("source month was not recognized")?,
+            first.parse::<u8>().map_err(|_| "source day was invalid")?,
+        ),
+    };
     let year = year.parse::<u16>().map_err(|_| "source year was invalid")?;
     CalendarDate::parse(&format!("{year:04}-{:02}-{day:02}", month.number()))
+}
+
+fn parse_dotted(value: &str) -> Result<CalendarDate, &'static str> {
+    let parts = value.trim_end_matches('.').split('.').collect::<Vec<_>>();
+    let [year, month, day] = parts.as_slice() else {
+        return Err("source dotted date must have three components");
+    };
+    if year.len() != 4
+        || ![year, month, day]
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return Err("source dotted date must use ASCII decimal components");
+    }
+    let year = year.parse::<u16>().map_err(|_| "source year was invalid")?;
+    let month = month
+        .parse::<u8>()
+        .map_err(|_| "source month was invalid")?;
+    let day = day.parse::<u8>().map_err(|_| "source day was invalid")?;
+    CalendarDate::parse(&format!("{year:04}-{month:02}-{day:02}"))
 }
 
 fn parse_iso_datetime(value: &str) -> Result<CalendarDate, &'static str> {
@@ -108,8 +143,13 @@ fn parse_korean(value: &str) -> Result<CalendarDate, &'static str> {
     let [year, month, day] = parts.as_slice() else {
         return Err("source date must be a complete Korean date");
     };
-    let year = parse_korean_component(year, '년', 4..=4)
-        .ok_or("source year must use four ASCII digits")?;
+    let year = year.strip_suffix('년').unwrap_or(year);
+    if year.len() != 4 || !year.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("source year must use four ASCII digits");
+    }
+    let year = year
+        .parse::<u16>()
+        .map_err(|_| "source year must use four ASCII digits")?;
     let month =
         parse_korean_component(month, '월', 1..=2).ok_or("source month must use ASCII digits")?;
     let day = parse_korean_component(day, '일', 1..=2).ok_or("source day must use ASCII digits")?;
@@ -147,18 +187,18 @@ enum EnglishMonth {
 impl EnglishMonth {
     fn parse(value: &str) -> Option<Self> {
         match value {
-            "January" => Some(Self::January),
-            "February" => Some(Self::February),
-            "March" => Some(Self::March),
-            "April" => Some(Self::April),
+            "January" | "Jan" | "Jan." => Some(Self::January),
+            "February" | "Feb" | "Feb." => Some(Self::February),
+            "March" | "Mar" | "Mar." => Some(Self::March),
+            "April" | "Apr" | "Apr." => Some(Self::April),
             "May" => Some(Self::May),
-            "June" => Some(Self::June),
-            "July" => Some(Self::July),
-            "August" => Some(Self::August),
-            "September" => Some(Self::September),
-            "October" => Some(Self::October),
-            "November" => Some(Self::November),
-            "December" => Some(Self::December),
+            "June" | "Jun" | "Jun." => Some(Self::June),
+            "July" | "Jul" | "Jul." => Some(Self::July),
+            "August" | "Aug" | "Aug." => Some(Self::August),
+            "September" | "Sep" | "Sep." | "Sept" | "Sept." => Some(Self::September),
+            "October" | "Oct" | "Oct." => Some(Self::October),
+            "November" | "Nov" | "Nov." => Some(Self::November),
+            "December" | "Dec" | "Dec." => Some(Self::December),
             _ => None,
         }
     }
@@ -198,6 +238,42 @@ mod tests {
             result.map(|date| date.to_string()),
             Ok("2026-08-06".to_owned())
         );
+    }
+
+    #[test]
+    fn parses_korean_table_date_with_bare_year() {
+        for value in ["2026 8월 27일", "2026 08월 27일"] {
+            assert_eq!(
+                parse(value).map(|date| date.to_string()),
+                Ok("2026-08-27".to_owned())
+            );
+        }
+    }
+
+    #[test]
+    fn parses_day_first_english_full_date() {
+        assert_eq!(
+            parse("28 August 2026").map(|date| date.to_string()),
+            Ok("2026-08-28".to_owned())
+        );
+    }
+
+    #[test]
+    fn parses_abbreviated_english_full_date() {
+        assert_eq!(
+            parse("Aug. 20, 2026").map(|date| date.to_string()),
+            Ok("2026-08-20".to_owned())
+        );
+    }
+
+    #[test]
+    fn parses_unambiguous_dotted_full_date() {
+        for value in ["2026.8.27", "2026.08.27", "2026.8.27."] {
+            assert_eq!(
+                parse(value).map(|date| date.to_string()),
+                Ok("2026-08-27".to_owned())
+            );
+        }
     }
 
     #[test]

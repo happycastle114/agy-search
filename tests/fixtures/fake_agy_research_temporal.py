@@ -139,8 +139,15 @@ def audit_candidate(
         "claim": claim,
         "url": url,
         "date": date,
+        "value": claim,
+        "evidence_excerpt": (
+            f"Verified source body contains {claim} as exact supported fixture evidence."
+        ),
     }
     if date is not None:
         candidate["source_date_text"] = date
-        candidate["evidence_excerpt"] = f"Published {date}"
+        candidate["evidence_excerpt"] = (
+            f"Verified source body contains {claim} as exact supported fixture evidence. "
+            f"Published {date}."
+        )
     return candidate

@@ -10,7 +10,7 @@ use crate::{
     types::TimeoutSeconds,
 };
 
-const MINIMUM_VERSION: AgyVersion = AgyVersion::new(1, 1, 10);
+const MINIMUM_VERSION: AgyVersion = AgyVersion::new(1, 1, 20);
 
 /// One end-to-end deadline shared by all downstream preflight and content work.
 #[derive(Clone, Copy, Debug)]
@@ -119,11 +119,11 @@ mod tests {
     #[test]
     fn parses_semantic_official_release_versions() {
         assert!(matches!(
-            AgyVersion::parse_output(b"1.1.10\n"),
-            Ok(version) if version == AgyVersion::new(1, 1, 10)
+            AgyVersion::parse_output(b"1.1.20\n"),
+            Ok(version) if version == AgyVersion::new(1, 1, 20)
         ));
         assert!(
-            AgyVersion::parse_output(b"1.1.9\n").is_ok_and(|version| version < MINIMUM_VERSION)
+            AgyVersion::parse_output(b"1.1.19\n").is_ok_and(|version| version < MINIMUM_VERSION)
         );
         assert!(
             AgyVersion::parse_output(b"2.0.0\r\n").is_ok_and(|version| version > MINIMUM_VERSION)
@@ -133,11 +133,11 @@ mod tests {
     #[test]
     fn rejects_non_official_or_ambiguous_release_payloads() {
         for output in [
-            b"agy 1.1.10\n".as_slice(),
+            b"agy 1.1.20\n".as_slice(),
             b"1.1\n",
-            b"1.1.10-rc.1\n",
-            b"1.01.10\n",
-            b"1.1.10\nextra\n",
+            b"1.1.20-rc.1\n",
+            b"1.01.20\n",
+            b"1.1.20\nextra\n",
         ] {
             assert!(matches!(
                 AgyVersion::parse_output(output),

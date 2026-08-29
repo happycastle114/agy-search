@@ -111,26 +111,31 @@ impl VerifiedSources {
     }
 }
 
-const fn map_source_error(error: &SourceContractError) -> AgyError {
+pub(crate) const fn map_source_error(error: &SourceContractError) -> AgyError {
     match error {
-        SourceContractError::Fetch(fetch_error) => match fetch_error {
-            SourceFetchError::Deadline
-            | SourceFetchError::Network(SourceNetworkError::Deadline) => AgyError::Timeout,
-            SourceFetchError::Unavailable => AgyError::Unavailable,
-            SourceFetchError::Network(
-                SourceNetworkError::InvalidUrl
-                | SourceNetworkError::UnsafeAddress
-                | SourceNetworkError::Dns,
-            )
-            | SourceFetchError::ProcessFailed
-            | SourceFetchError::Oversize
-            | SourceFetchError::InvalidResponse
-            | SourceFetchError::InvalidUtf8
-            | SourceFetchError::EmptyBody => AgyError::OutputInvalid,
-        },
+        SourceContractError::Fetch(fetch_error) => map_source_fetch_error(fetch_error),
         SourceContractError::InvalidAllowlist
         | SourceContractError::Document(_)
-        | SourceContractError::SourceNotAllowed
-        | SourceContractError::TaskFailed => AgyError::OutputInvalid,
+        | SourceContractError::SourceNotAllowed => AgyError::OutputInvalid,
+    }
+}
+
+pub(crate) const fn map_source_fetch_error(error: &SourceFetchError) -> AgyError {
+    match error {
+        SourceFetchError::Deadline | SourceFetchError::Network(SourceNetworkError::Deadline) => {
+            AgyError::Timeout
+        }
+        SourceFetchError::Unavailable => AgyError::Unavailable,
+        SourceFetchError::Network(
+            SourceNetworkError::InvalidUrl
+            | SourceNetworkError::UnsafeAddress
+            | SourceNetworkError::Dns,
+        )
+        | SourceFetchError::ProcessFailed
+        | SourceFetchError::Oversize
+        | SourceFetchError::InvalidResponse
+        | SourceFetchError::InvalidUtf8
+        | SourceFetchError::EmptyBody
+        | SourceFetchError::TaskFailed => AgyError::OutputInvalid,
     }
 }

@@ -33,14 +33,27 @@ class SourceCurlFlag(str, Enum):
 
 
 class SourcePath(str, Enum):
+    ROOT = "/"
+    BOOK = "/book/"
+    PAGE = "/page"
+    FIRST = "/first"
+    SECOND_PAGE = "/second"
+    NEWS = "/v/20260807120301584"
     SOURCE = "/source"
     PRIMARY = "/primary"
+    PRIMARY_SOURCE = "/primary-source"
+    SECONDARY = "/secondary"
+    DIRECT_MARKET_SOURCE = "/direct-market-source"
     ALPHA = "/alpha"
     BETA = "/beta"
+    CATALOG_POLICY_1 = "/catalog-policy-1"
+    CATALOG_POLICY_2 = "/catalog-policy-2"
+    CANONICAL = "/canonical"
     RELEASES = "/releases"
     TIMEOUT = "/timeout"
     FAILED = "/failed"
     INVALID = "/invalid"
+    KOREAN_DATE = "/korean-date"
     LOCAL = "/local"
     LOCAL_UNEXTRACTABLE = "/local-unextractable"
     LOCAL_V25 = "/local-v25"
@@ -174,15 +187,40 @@ def source_main(arguments: list[str]) -> int:
 
 def source_body(path: SourcePath) -> str | None:
     match path:
+        case SourcePath.PAGE | SourcePath.FIRST | SourcePath.SECOND_PAGE:
+            return (
+                "<title>Page</title><main>Extracted content from the exact "
+                "deterministic fixture page for source-backed projection.</main>"
+            )
+        case SourcePath.ROOT | SourcePath.BOOK | SourcePath.NEWS:
+            return fixture_evidence_body("Allowed")
         case SourcePath.SOURCE:
-            return panels(
+            return fixture_evidence_body("Evidence") + panels(
                 ("newer", "newer fixture", "v2 August 3, 2026"),
                 ("older", "older fixture", "v1 August 2, 2026"),
             )
         case SourcePath.PRIMARY:
-            return panels(
+            return (
+                "<p>Primary source contains Primary evidence from verified body. "
+                "Verified generic search evidence appears in this deterministic source body."
+                "</p>"
+            ) + panels(
                 ("alpha", "alpha", "alpha-v1 2026-08-03"),
                 ("beta", "beta", "beta-v1 2026-08-02"),
+            )
+        case SourcePath.PRIMARY_SOURCE:
+            return fixture_evidence_body("Primary")
+        case SourcePath.SECONDARY:
+            return (
+                "<p>Secondary source contains Secondary evidence from verified body. "
+                "Verified generic search evidence appears in this deterministic source body."
+                "</p>"
+            )
+        case SourcePath.DIRECT_MARKET_SOURCE:
+            return (
+                "<p>Market source contains Market evidence from verified body. "
+                "Verified generic search evidence appears in this deterministic source body."
+                "</p>"
             )
         case SourcePath.ALPHA:
             return panels(
@@ -191,6 +229,17 @@ def source_body(path: SourcePath) -> str | None:
         case SourcePath.BETA:
             return panels(
                 ("beta", "beta", "beta-v1 2026-08-04 beta-v2 2026-08-03"),
+            )
+        case SourcePath.CATALOG_POLICY_1:
+            return fixture_evidence_body("Catalog policy verified primary evidence")
+        case SourcePath.CATALOG_POLICY_2:
+            return fixture_evidence_body("Catalog policy verified alternate evidence")
+        case SourcePath.CANONICAL:
+            return fixture_evidence_body("Canonical")
+        case SourcePath.KOREAN_DATE:
+            return (
+                "<title>한국어 날짜 출처</title>"
+                "<p>게시일 2026년 8월 6일 공식 출처 본문 근거입니다.</p>"
             )
         case SourcePath.RELEASES:
             return panels(
@@ -241,6 +290,15 @@ def source_body(path: SourcePath) -> str | None:
                 ("cli", "Antigravity CLI", "1.1.11", "August 4, 2026"),
             )
     return None
+
+
+def fixture_evidence_body(value: str) -> str:
+    return (
+        f"<p>Verified source body contains {value} as exact supported fixture evidence. "
+        "Verified generic search evidence appears in this deterministic source body. "
+        "Published 2026-08-03. Published February 2013. Published 2013-02-20. "
+        "Published June 1, 1999.</p>"
+    )
 
 
 def panels(*rows: tuple[str, str, str]) -> str:

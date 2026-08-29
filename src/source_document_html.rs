@@ -11,7 +11,9 @@ mod tokenizer;
 
 use thiserror::Error;
 
-pub(crate) use attribute_selection::{AttributedElement, elements_with_attribute};
+pub(crate) use attribute_selection::{
+    AttributedElement, elements_with_attribute, elements_with_attribute_on,
+};
 pub(crate) use text_normalization::normalize_text;
 
 #[derive(Debug, Error)]

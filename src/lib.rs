@@ -13,6 +13,7 @@ pub(crate) mod process;
 pub(crate) mod prompt;
 pub(crate) mod redirect;
 pub(crate) mod request;
+pub(crate) mod research_source_evidence;
 pub(crate) mod response;
 pub(crate) mod response_models;
 pub(crate) mod response_urls;

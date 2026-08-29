@@ -171,7 +171,8 @@ impl ContentRequest {
                 VerificationMode::TemporalComparison => ResearchToolBudget::TemporalSearch,
             },
             Self::Research(request) => ResearchToolBudget::Research(request.tool_call_budget),
-            Self::Extract(_) | Self::Map(_) | Self::Crawl(_) => ResearchToolBudget::Single,
+            Self::Extract(request) => ResearchToolBudget::DirectReads(request.urls.len()),
+            Self::Map(_) | Self::Crawl(_) => ResearchToolBudget::Single,
         }
     }
 
@@ -207,6 +208,19 @@ mod tests {
     use crate::types::ResearchAttemptBudget;
 
     #[test]
+    fn extract_tool_budget_matches_requested_url_count() {
+        let request = ContentRequest::Extract(ExtractRequest {
+            urls: vec![
+                HttpUrl::parse("https://example.com/one").expect("test URL must be valid"),
+                HttpUrl::parse("https://example.com/two").expect("test URL must be valid"),
+            ],
+            query: None,
+        });
+
+        assert_eq!(request.tool_budget(), ResearchToolBudget::DirectReads(2));
+    }
+
+    #[test]
     fn research_request_serializes_explicit_attempt_budget() {
         // Given a synthesis request with four requested sources.
         let request = ContentRequest::Research(ResearchRequest {
@@ -227,6 +241,6 @@ mod tests {
                 .expect("serialized request must be JSON");
 
         // Then the exact derived attempt budget crosses the request boundary.
-        assert_eq!(serialized.get("tool_call_budget"), Some(&json!(6)));
+        assert_eq!(serialized.get("tool_call_budget"), Some(&json!(9)));
     }
 }

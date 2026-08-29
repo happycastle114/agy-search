@@ -1,61 +1,51 @@
-use super::preferred_search_model;
-use crate::types::{Effort, Operation, PreferredSearchModel, VerificationMode};
+use super::{ModelPreference, preferred_model_policy};
+use crate::types::{Effort, GeminiFlashGeneration, Operation, PreferredModel, VerificationMode};
 
 #[test]
-fn prefers_only_unpinned_low_effort_standard_search() {
-    // Given: every operation, verification mode, and supported effort class.
-    let ineligible = [
-        (
-            Operation::Search,
-            VerificationMode::TemporalComparison,
-            Some(Effort::Low),
-        ),
-        (
-            Operation::Search,
-            VerificationMode::Standard,
-            Some(Effort::Medium),
-        ),
-        (
-            Operation::Search,
-            VerificationMode::Standard,
-            Some(Effort::High),
-        ),
-        (Operation::Search, VerificationMode::Standard, None),
-        (
-            Operation::Research,
-            VerificationMode::Standard,
-            Some(Effort::Low),
-        ),
-        (
-            Operation::Extract,
-            VerificationMode::Standard,
-            Some(Effort::Low),
-        ),
-        (
-            Operation::Map,
-            VerificationMode::Standard,
-            Some(Effort::Low),
-        ),
-        (
-            Operation::Crawl,
-            VerificationMode::Standard,
-            Some(Effort::Low),
-        ),
-    ];
-
-    // When: preference eligibility is resolved before advisory discovery.
-    let preferred = preferred_search_model(
+fn model_policy_uses_gemini_3_7_low_with_escalating_search_recovery() {
+    let preferred = preferred_model_policy(
         Operation::Search,
         VerificationMode::Standard,
         Some(Effort::Low),
     );
 
-    // Then: only ordinary low-effort Search can request the fixed typed preference.
-    assert_eq!(preferred, Some(PreferredSearchModel::Low));
-    for (operation, verification, effort) in ineligible {
+    assert_eq!(
+        preferred,
+        Some(ModelPreference {
+            primary: PreferredModel::gemini_flash(GeminiFlashGeneration::V3_7, Effort::Low,),
+            recovery_generation: Some(GeminiFlashGeneration::V3_7),
+        })
+    );
+}
+
+#[test]
+fn model_policy_uses_gemini_3_7_for_quality_and_content_operations() {
+    for (operation, verification, effort) in [
+        (
+            Operation::Search,
+            VerificationMode::Standard,
+            Effort::Medium,
+        ),
+        (
+            Operation::Search,
+            VerificationMode::TemporalComparison,
+            Effort::High,
+        ),
+        (Operation::Research, VerificationMode::Standard, Effort::Low),
+        (Operation::Extract, VerificationMode::Standard, Effort::Low),
+        (Operation::Map, VerificationMode::Standard, Effort::Medium),
+        (Operation::Crawl, VerificationMode::Standard, Effort::High),
+    ] {
         assert_eq!(
-            preferred_search_model(operation, verification, effort),
-            None
+            preferred_model_policy(operation, verification, Some(effort)),
+            Some(ModelPreference {
+                primary: PreferredModel::gemini_flash(GeminiFlashGeneration::V3_7, effort,),
+                recovery_generation: None,
+            })
         );
     }
+    assert_eq!(
+        preferred_model_policy(Operation::Research, VerificationMode::Standard, None),
+        None
+    );
 }

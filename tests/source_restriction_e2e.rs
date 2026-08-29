@@ -64,6 +64,34 @@ fn research_rejects_one_disallowed_public_citation_or_hidden_candidate() {
 }
 
 #[test]
+fn domain_restricted_research_rejects_a_bare_origin_as_evidence() {
+    // Given: a domain-scoped research response that cites only the allowed site's origin.
+    // When/Then: the CLI rejects it because an origin is not a deep evidence page.
+    command()
+        .args([
+            "research",
+            "source-research-domain-root",
+            "--domain",
+            "rust-lang.org",
+        ])
+        .assert()
+        .code(6);
+}
+
+#[test]
+fn research_accepts_a_bare_origin_only_when_it_is_the_exact_requested_url() {
+    command()
+        .args([
+            "research",
+            "source-research-domain-root",
+            "--source-url",
+            "https://rust-lang.org/",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
 fn restricted_search_rejects_contributor_and_mutated_site_queries() {
     for query in [
         "source-contributor-blog",
@@ -78,7 +106,7 @@ fn restricted_search_rejects_contributor_and_mutated_site_queries() {
 }
 
 #[test]
-fn exact_source_url_is_an_output_allowlist_without_body_fetching()
+fn exact_source_url_is_an_output_allowlist_with_same_url_body_proof()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: a standard Search exact URL restriction and a curl trace sentinel.
     let temporary = TempDir::new()?;
@@ -96,18 +124,25 @@ fn exact_source_url_is_an_output_allowlist_without_body_fetching()
         .assert()
         .success();
 
-    // Then: the public result succeeds after terminal validation without fetching a body.
+    // Then: the public result succeeds only after fetching that same terminal page body.
     let output: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
     assert_eq!(
         output.pointer("/results/0/url").and_then(Value::as_str),
         Some("https://doc.rust-lang.org/book/")
     );
-    assert!(!curl_trace.exists());
+    let trace = std::fs::read_to_string(curl_trace)?;
+    let records = trace.lines().collect::<Vec<_>>();
+    assert_eq!(records.len(), 1);
+    assert!(
+        records
+            .first()
+            .is_some_and(|record| record.contains("https://doc.rust-lang.org/book/"))
+    );
     Ok(())
 }
 
 #[test]
-fn standard_research_accepts_an_exact_source_url_without_fetching()
+fn standard_research_refetches_and_accepts_an_exact_source_url()
 -> Result<(), Box<dyn std::error::Error>> {
     let temporary = TempDir::new()?;
     let curl_trace = temporary.path().join("curl.jsonl");
@@ -123,7 +158,8 @@ fn standard_research_accepts_an_exact_source_url_without_fetching()
         .assert()
         .success();
 
-    assert!(!curl_trace.exists());
+    let trace = std::fs::read_to_string(curl_trace)?;
+    assert!(trace.contains("https://doc.rust-lang.org/book/"));
     Ok(())
 }
 
@@ -267,7 +303,7 @@ fn invalid_or_duplicate_restrictions_exit_before_antigravity()
 }
 
 #[test]
-fn unrestricted_search_omits_policy_and_uses_one_process_without_body_fetching()
+fn unrestricted_search_omits_policy_and_uses_one_process_with_body_proof()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: traces for an ordinary no-flag Search.
     let temporary = TempDir::new()?;
@@ -282,13 +318,20 @@ fn unrestricted_search_omits_policy_and_uses_one_process_without_body_fetching()
         .assert()
         .success();
 
-    // Then: one content process ran, no body fetch ran, and no restriction was serialized.
+    // Then: one content process and one same-URL body fetch ran, with no serialized restriction.
     let records = std::fs::read_to_string(agy_trace)?;
     let records = records.lines().collect::<Vec<_>>();
     assert_eq!(records.len(), 1);
     let record: Value =
         serde_json::from_str(records.first().copied().ok_or("missing invocation trace")?)?;
     assert!(record.get("source_restriction").is_none());
-    assert!(!curl_trace.exists());
+    let curl_records = std::fs::read_to_string(curl_trace)?;
+    let curl_records = curl_records.lines().collect::<Vec<_>>();
+    assert_eq!(curl_records.len(), 1);
+    assert!(
+        curl_records
+            .first()
+            .is_some_and(|record| record.contains("https://example.com/source"))
+    );
     Ok(())
 }

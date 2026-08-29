@@ -10,9 +10,12 @@ from pathlib import Path
 from typing import Final
 
 
-PREFERRED_MODEL: Final = "gemini-3.6-flash-low"
-FIRST_RETRY_MODEL: Final = "gemini-3.6-flash-medium"
-FINAL_RETRY_MODEL: Final = "gemini-3.6-flash-high"
+PREFERRED_MODEL: Final = "gemini-3.7-flash-low"
+FIRST_RETRY_MODEL: Final = "gemini-3.7-flash-medium"
+FINAL_RETRY_MODEL: Final = "gemini-3.7-flash-high"
+QUALITY_LOW_MODEL: Final = "gemini-3.7-flash-low"
+QUALITY_MEDIUM_MODEL: Final = "gemini-3.7-flash-medium"
+QUALITY_HIGH_MODEL: Final = "gemini-3.7-flash-high"
 TRACE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_TRACE"
 CATALOG_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_MODE"
 CATALOG_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_DELAY"
@@ -45,6 +48,8 @@ def emit_search_response(transports: tuple[str, str]) -> None:
     """Emit a schema-valid diversified search response and one evidence tool."""
     conversation_id = "catalog-policy"
     source_url, second_url = transports
+    primary_value = "Catalog policy verified primary evidence"
+    alternate_value = "Catalog policy verified alternate evidence"
     structured_output = {
         "object": "search",
         "evidence_audit": {
@@ -54,12 +59,20 @@ def emit_search_response(transports: tuple[str, str]) -> None:
                     "claim": "catalog policy fixture",
                     "url": source_url,
                     "date": None,
+                    "value": primary_value,
+                    "evidence_excerpt": (
+                        f"{primary_value} from the deterministic source body."
+                    ),
                 },
                 {
                     "scope": "catalog policy alternate",
                     "claim": "catalog policy fixture alternate",
                     "url": second_url,
                     "date": None,
+                    "value": alternate_value,
+                    "evidence_excerpt": (
+                        f"{alternate_value} from the deterministic source body."
+                    ),
                 },
             ],
             "coverage_complete": True,
@@ -67,14 +80,14 @@ def emit_search_response(transports: tuple[str, str]) -> None:
         },
         "results": [
             {
-                "title": "Catalog policy",
+                "title": primary_value,
                 "url": source_url,
                 "snippet": "catalog policy fixture",
                 "date": None,
                 "last_updated": None,
             },
             {
-                "title": "Catalog policy alternate",
+                "title": alternate_value,
                 "url": second_url,
                 "snippet": "catalog policy fixture alternate",
                 "date": None,
@@ -133,7 +146,7 @@ def main() -> int:
     arguments = sys.argv[1:]
     if arguments == ["--version"]:
         trace({"kind": "version", "model": None, "effort": None})
-        print("1.1.10")
+        print("1.1.20")
         return 0
     if arguments == ["models"]:
         trace({"kind": "models", "model": None, "effort": None})
@@ -144,9 +157,19 @@ def main() -> int:
         if mode == "failed":
             return 1
         catalog = {
-            "preferred": [PREFERRED_MODEL, FIRST_RETRY_MODEL, FINAL_RETRY_MODEL],
-            "without-medium": [PREFERRED_MODEL, FINAL_RETRY_MODEL],
-            "without-high": [PREFERRED_MODEL, FIRST_RETRY_MODEL],
+            "preferred": [
+                PREFERRED_MODEL,
+                FIRST_RETRY_MODEL,
+                FINAL_RETRY_MODEL,
+            ],
+            "without-medium": [
+                PREFERRED_MODEL,
+                FINAL_RETRY_MODEL,
+            ],
+            "without-high": [
+                PREFERRED_MODEL,
+                FIRST_RETRY_MODEL,
+            ],
             "low-only": [PREFERRED_MODEL],
         }
         for model in catalog.get(mode, []):

@@ -2,7 +2,7 @@
 
 `agy-search` keeps wrapper work small and treats Antigravity and its web tools
 as an external latency boundary. The local measurements below are from the
-Apple Silicon development host on 2026-08-06. They are observations, not service
+Apple Silicon development host. They are observations, not service
 level objectives or a guarantee for another machine, account, model, or provider
 state.
 
@@ -110,13 +110,77 @@ source-quality and SSRF boundary to improve a benchmark number.
 
 For ordinary low-effort standard Search, the wrapper now makes one advisory
 `agy models` query, bounded to five seconds inside the existing caller deadline,
-and adds `--model gemini-3.6-flash-low` only when that exact catalog entry is
+and adds `--model gemini-3.7-flash-low` only when that exact catalog entry is
 returned. If it is absent or advisory discovery fails while time remains, the
 content process omits `--model` and uses the provider default. Explicit pins
 remain strict and run fresh full-deadline discovery; temporal/research/site
-operations and medium/high Search skip the preference query. Re-run this
+operations and medium/high Search now use the same bounded negotiation for the
+matching Gemini 3.7 Flash effort. Re-run this
 comparison before changing the preference because provider behavior and the
 runtime catalog can change independently of this wrapper.
+
+### Gemini 3.7 Flash policy measurement
+
+Early on 2026-08-29, before same-URL body projection was enabled, Antigravity
+CLI 1.1.22 and the 0.3.0 candidate ran the same IANA
+lookup three times per low-effort arm. Gemini 3.7 Flash completed in 27.58,
+17.61, and 18.04 seconds (18.04-second median). Gemini 3.6 Flash completed in
+13.17, 14.23, and 17.56 seconds (14.23-second median). All six runs returned an
+IANA URL, but one 3.7 response also invented an unrelated `example.edu` row and
+therefore failed the semantic quality oracle. This pre-verification measurement
+is retained as provider behavior evidence; it is not the 0.3.0 routing policy.
+
+Version 0.3.0 negotiates Gemini 3.7 Flash for every Search effort, temporal
+Search, Research, Extract, Map, and Crawl. Standard Search then fetches the
+terminal publisher page, removes candidates whose values do not bind to that
+same page, replaces model titles with fetched document titles, and publishes
+locally sliced body context. That deterministic boundary rejects the invented
+row class instead of relying on model prose. Exact-URL Research now prefetches
+bounded query-relevant source windows for the primary and recovery attempts and
+reuses that immutable body snapshot for final binding. Extract likewise
+replaces model content with query-relevant windows from the independently
+fetched exact page, preventing nested JSON or hallucinated prose from being
+published. The production gate in
+`tests/production_quality_gate.rs` checks known-page extraction and multi-source official Google research,
+local same-URL exact-value proof plus locally projected body context for every
+Research audit candidate, projected finding/report summaries, and a second
+extraction of every retained research source. Its four independent
+claims must resolve to the corresponding current Google AI overview, model,
+thinking, and Search-grounding documentation pages. A release candidate does
+not pass when any source is a bare origin, search wrapper, unretained citation,
+unread Research source, body-mismatched exact value, omitted requested claim,
+or source body missing the requested markers.
+
+### Current-affairs and research release gates
+
+On 2026-08-29, the final 0.3.0 candidate passed the opt-in current-affairs gate
+against three independently established official-source oracles. Each result
+had to match a known exact evidence URL (query-parameter order ignored), expose
+only source-backed date metadata, and contain the listed same-page facts.
+
+| Oracle | AGY Search wall time | Exact official source outcome |
+|---|---:|---|
+| Bank of Korea policy rate | 17.36 s | 3.00 and prior 2.75 on the official rate history or 2026-08-27 decision page |
+| Latest stable Rust release | 15.60 s | Rust 1.98.0, published 2026-08-20 |
+| Latest WHO item as of 2026-08-29 | 45.71 s | 2026-08-28 Ebola Bundibugyo IHR Emergency Committee meeting report |
+
+The final body-projected candidate passed the separate production Research gate
+in 172.07 seconds: known IANA extraction took 21.96 seconds, four-source Gemini
+3.7 research took 43.36 seconds, and independent re-extraction of all four
+retained sources took 106.75 seconds total. These are finite live observations, not an
+availability or latency SLO. The direct official links found through the
+external comparison search and through AGY were equivalent at the oracle level;
+the external comparison search was generally faster at discovery, while AGY's
+release gate added local body binding and fail-closed publication checks.
+
+Multi-URL Extract is split into at most four concurrent isolated single-URL AGY
+runs and merged in caller order. Each result's public content is projected from
+its independently fetched exact page rather than model prose. This avoids one
+long conversation broadening its local-tool behavior after several page reads,
+while retaining all-or-nothing output and the original shared deadline.
+Standard Search similarly discards a
+run containing a balanced failed web-tool attempt and spends a configured
+recovery tier; the mixed-error result itself is never published.
 
 The 0.2.9 correction keeps the low fast path and diversifies bounded recovery
 through the discovered medium and high tiers. Its exact `한국 오늘 증시` serial
@@ -172,3 +236,10 @@ Run live commands only when an authenticated Antigravity account and the
 associated usage are in scope. Capture the command, model, effort, output, exit
 code, and wall time, then distinguish successful observations from fail-closed
 attempts before reporting any median or final timing.
+
+Run the reusable production quality gate with the normal unpinned model policy:
+
+```bash
+AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
+cargo test --test production_quality_gate --locked -- --ignored --nocapture
+```

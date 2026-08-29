@@ -43,7 +43,7 @@ def version() -> int:
     append_trace("version")
     spawn_background_child()
     sleep_for("AGY_SEARCH_VERSION_DELAY")
-    value = os.environ.get("AGY_SEARCH_VERSION", "1.1.10")
+    value = os.environ.get("AGY_SEARCH_VERSION", "1.1.20")
     if value:
         print(value)
     return 0

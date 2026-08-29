@@ -82,7 +82,7 @@ impl ModelCatalog {
         self.models.contains(&ResolvedModel::new(selected.clone()))
     }
 
-    pub(crate) fn preferred(&self, preferred: PreferredSearchModel) -> Option<ModelSlug> {
+    pub(crate) fn preferred(&self, preferred: PreferredModel) -> Option<ModelSlug> {
         let preferred = ResolvedModel::from(preferred);
         self.models
             .iter()
@@ -95,27 +95,39 @@ impl ModelCatalog {
     }
 }
 
-/// Catalog-backed model preference for ordinary latency-sensitive Search.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum PreferredSearchModel {
-    Low,
-    Medium,
-    High,
+pub(crate) enum GeminiFlashGeneration {
+    V3_7,
 }
 
-impl PreferredSearchModel {
-    const fn slug(self) -> &'static str {
-        match self {
-            Self::Low => "gemini-3.6-flash-low",
-            Self::Medium => "gemini-3.6-flash-medium",
-            Self::High => "gemini-3.6-flash-high",
-        }
+impl fmt::Display for GeminiFlashGeneration {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::V3_7 => "3.7",
+        })
     }
 }
 
-impl From<PreferredSearchModel> for ResolvedModel {
-    fn from(preferred: PreferredSearchModel) -> Self {
-        Self::new(ModelSlug(preferred.slug().to_owned()))
+/// One typed, catalog-negotiated Gemini Flash preference.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PreferredModel {
+    generation: GeminiFlashGeneration,
+    effort: Effort,
+}
+
+impl PreferredModel {
+    pub(crate) const fn gemini_flash(generation: GeminiFlashGeneration, effort: Effort) -> Self {
+        Self { generation, effort }
+    }
+
+    fn slug(self) -> String {
+        format!("gemini-{}-flash-{}", self.generation, self.effort)
+    }
+}
+
+impl From<PreferredModel> for ResolvedModel {
+    fn from(preferred: PreferredModel) -> Self {
+        Self::new(ModelSlug(preferred.slug()))
     }
 }
 

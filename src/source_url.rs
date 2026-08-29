@@ -91,6 +91,30 @@ impl HttpUrl {
             KnownSourceHost::parse(parsed.host_str()) == KnownSourceHost::NewsPortal
         })
     }
+
+    pub(crate) fn is_latest_landing(&self) -> bool {
+        Url::parse(self.as_str()).is_ok_and(|parsed| {
+            parsed
+                .path()
+                .trim_matches('/')
+                .rsplit('/')
+                .next()
+                .and_then(|leaf| leaf.split('.').next())
+                .is_some_and(|stem| SiteLandingName::parse(stem) == Some(SiteLandingName::Latest))
+        })
+    }
+
+    pub(crate) fn is_structured_collection(&self) -> bool {
+        Url::parse(self.as_str()).is_ok_and(|parsed| {
+            parsed
+                .path()
+                .trim_matches('/')
+                .rsplit('/')
+                .next()
+                .and_then(|leaf| leaf.split('.').next())
+                .is_some_and(|stem| StructuredCollectionName::parse(stem).is_some())
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -98,6 +122,7 @@ enum KnownSourceHost {
     VertexAiSearch,
     GoogleSearch,
     GoogleNews,
+    GoogleAsset,
     GoogleShortener,
     NewsPortal,
     Other,
@@ -105,19 +130,53 @@ enum KnownSourceHost {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SiteLandingName {
+    Archive,
+    Archives,
+    Contents,
     Default,
+    Headlines,
     Home,
     Index,
+    Listing,
+    Latest,
     Main,
+    News,
+    NewsRoom,
+    Newsroom,
+    Releases,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StructuredCollectionName {
+    List,
+}
+
+impl StructuredCollectionName {
+    fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "list" => Some(Self::List),
+            _ => None,
+        }
+    }
 }
 
 impl SiteLandingName {
     fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
+            "archive" => Some(Self::Archive),
+            "archives" => Some(Self::Archives),
+            "contents" => Some(Self::Contents),
             "default" => Some(Self::Default),
+            "headlines" => Some(Self::Headlines),
             "home" => Some(Self::Home),
             "index" => Some(Self::Index),
+            "listing" => Some(Self::Listing),
+            "latest" => Some(Self::Latest),
             "main" => Some(Self::Main),
+            "news" => Some(Self::News),
+            "news-room" => Some(Self::NewsRoom),
+            "newsroom" => Some(Self::Newsroom),
+            "releases" => Some(Self::Releases),
             _ => None,
         }
     }
@@ -127,12 +186,11 @@ impl KnownSourceHost {
     fn parse(host: Option<&str>) -> Self {
         const VERTEX_AI_SEARCH: &str = "vertexaisearch.cloud.google.com";
         const GOOGLE_SHORTENERS: [&str; 2] = ["g.co", "goo.gl"];
-        const GOOGLE_TRANSPORT_LABELS: [&str; 5] = [
-            "google",
-            "googleadservices",
-            "googleapis",
-            "googleusercontent",
-            "gstatic",
+        const GOOGLE_ASSET_HOSTS: [&str; 4] = [
+            "googleadservices.com",
+            "googleapis.com",
+            "googleusercontent.com",
+            "gstatic.com",
         ];
         const NEWS_PORTALS: [&str; 5] = [
             "v.daum.net",
@@ -157,23 +215,29 @@ impl KnownSourceHost {
             .any(|candidate| host.eq_ignore_ascii_case(candidate))
         {
             Self::GoogleShortener
+        } else if GOOGLE_ASSET_HOSTS.iter().any(|candidate| {
+            host.eq_ignore_ascii_case(candidate)
+                || host
+                    .strip_suffix(candidate)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        }) {
+            Self::GoogleAsset
         } else {
             let mut labels = host.split('.');
             let first = labels.next();
             let second = labels.next();
-            let is_google_transport = first.into_iter().chain(second).chain(labels).any(|label| {
-                GOOGLE_TRANSPORT_LABELS
-                    .iter()
-                    .any(|candidate| label.eq_ignore_ascii_case(candidate))
-            });
-            if !is_google_transport {
-                Self::Other
-            } else if first.is_some_and(|label| label.eq_ignore_ascii_case("news"))
+            if first.is_some_and(|label| label.eq_ignore_ascii_case("news"))
                 && second.is_some_and(|label| label.eq_ignore_ascii_case("google"))
             {
                 Self::GoogleNews
-            } else {
+            } else if first.is_some_and(|label| {
+                label.eq_ignore_ascii_case("google") || label.eq_ignore_ascii_case("www")
+            }) && (first.is_some_and(|label| label.eq_ignore_ascii_case("google"))
+                || second.is_some_and(|label| label.eq_ignore_ascii_case("google")))
+            {
                 Self::GoogleSearch
+            } else {
+                Self::Other
             }
         }
     }
@@ -197,7 +261,7 @@ impl KnownSourceHost {
             }
             Self::GoogleShortener => SourceUrlKind::GroundingRedirect,
             Self::NewsPortal | Self::Other => SourceUrlKind::Direct,
-            Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews => {
+            Self::VertexAiSearch | Self::GoogleSearch | Self::GoogleNews | Self::GoogleAsset => {
                 SourceUrlKind::NonSource
             }
         }

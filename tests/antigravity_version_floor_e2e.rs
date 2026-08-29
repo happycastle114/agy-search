@@ -47,7 +47,7 @@ fn rejects_older_version_before_model_discovery_or_content()
 
     // When: a model-pinned content operation is requested.
     command(&invocation_trace)
-        .env("AGY_SEARCH_VERSION", "1.1.9")
+        .env("AGY_SEARCH_VERSION", "1.1.19")
         .args(["--model", "fixture-model", "search", "fixture"])
         .assert()
         .code(6)
@@ -62,7 +62,7 @@ fn rejects_older_version_before_model_discovery_or_content()
 #[test]
 fn accepts_minimum_and_later_official_versions_before_content()
 -> Result<(), Box<dyn std::error::Error>> {
-    for version in ["1.1.10", "1.1.11", "2.0.0"] {
+    for version in ["1.1.20", "1.1.22", "2.0.0"] {
         // Given: one official CLI version at or above the documented floor.
         let temporary = TempDir::new()?;
         let invocation_trace = trace(&temporary);
@@ -93,7 +93,7 @@ fn accepted_version_preserves_model_discovery_before_content()
 
     // When: the content command completes.
     command(&invocation_trace)
-        .env("AGY_SEARCH_VERSION", "1.1.10")
+        .env("AGY_SEARCH_VERSION", "1.1.20")
         .args(["--model", "fixture-model", "search", "fixture"])
         .assert()
         .success();
@@ -109,7 +109,7 @@ fn accepted_version_preserves_model_discovery_before_content()
 #[test]
 fn malformed_or_missing_version_fails_closed_without_partial_stdout()
 -> Result<(), Box<dyn std::error::Error>> {
-    for version in ["", "1.1.10 ", "agy 1.1.10", "1.1.10-rc.1", "1.1.10\nextra"] {
+    for version in ["", "1.1.20 ", "agy 1.1.20", "1.1.20-rc.1", "1.1.20\nextra"] {
         // Given: a missing or non-official version payload.
         let temporary = TempDir::new()?;
         let invocation_trace = trace(&temporary);
@@ -138,7 +138,7 @@ fn status_enforces_the_floor_while_models_remains_a_diagnostic_command()
 
     // When: status is requested.
     command(&unsupported_trace)
-        .env("AGY_SEARCH_VERSION", "1.1.9")
+        .env("AGY_SEARCH_VERSION", "1.1.19")
         .arg("status")
         .assert()
         .code(6)

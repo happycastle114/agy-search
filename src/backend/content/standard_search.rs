@@ -3,6 +3,7 @@
 use crate::{
     error::AgyError,
     prompt::{build_standard_search_final_retry_prompt, build_standard_search_retry_prompt},
+    research_source_evidence::SearchSourceEvidence,
     response::Document as ResponseDocument,
     types::{Operation, ResearchToolPolicy},
 };
@@ -31,11 +32,15 @@ pub(super) async fn run_standard_search(
             },
         )
         .await?,
-    )?;
+        context,
+    )
+    .await?;
     match first {
         StandardSearchRun::Response(response) => Ok(response),
-        StandardSearchRun::NoReachableResults | StandardSearchRun::RecoverableUnlistedTool => {
-            let Some(retry_context) = context.for_standard_retry(RecoveryStage::First) else {
+        StandardSearchRun::NoReachableResults
+        | StandardSearchRun::RecoverableUnlistedTool
+        | StandardSearchRun::RecoverableFailedWebTool => {
+            let Some(retry_context) = context.for_recovery(RecoveryStage::First) else {
                 return Err(AgyError::OutputInvalid);
             };
             let second = validate_standard_run(
@@ -49,13 +54,15 @@ pub(super) async fn run_standard_search(
                     },
                 )
                 .await?,
-            )?;
+                &retry_context,
+            )
+            .await?;
             match second {
                 StandardSearchRun::Response(response) => Ok(response),
                 StandardSearchRun::NoReachableResults
-                | StandardSearchRun::RecoverableUnlistedTool => {
-                    let Some(final_retry_context) =
-                        context.for_standard_retry(RecoveryStage::Final)
+                | StandardSearchRun::RecoverableUnlistedTool
+                | StandardSearchRun::RecoverableFailedWebTool => {
+                    let Some(final_retry_context) = context.for_recovery(RecoveryStage::Final)
                     else {
                         return Err(AgyError::OutputInvalid);
                     };
@@ -70,11 +77,14 @@ pub(super) async fn run_standard_search(
                             },
                         )
                         .await?,
-                    )?;
+                        &final_retry_context,
+                    )
+                    .await?;
                     match third {
                         StandardSearchRun::Response(response) => Ok(response),
                         StandardSearchRun::NoReachableResults
-                        | StandardSearchRun::RecoverableUnlistedTool => {
+                        | StandardSearchRun::RecoverableUnlistedTool
+                        | StandardSearchRun::RecoverableFailedWebTool => {
                             Err(AgyError::OutputInvalid)
                         }
                     }
@@ -84,12 +94,27 @@ pub(super) async fn run_standard_search(
     }
 }
 
-fn validate_standard_run(mut run: StandardSearchRun) -> Result<StandardSearchRun, AgyError> {
+async fn validate_standard_run(
+    mut run: StandardSearchRun,
+    context: &ExecutionContext,
+) -> Result<StandardSearchRun, AgyError> {
     if let StandardSearchRun::Response(response) = &mut run {
-        response
-            .validate_search_document()
-            .map_err(|_| AgyError::OutputInvalid)?;
-        response.project_unbound_standard_search_dates()?;
+        if response.validate_search_document().is_err()
+            || response.project_unbound_standard_search_dates().is_err()
+        {
+            return Err(AgyError::OutputInvalid);
+        }
+        let ResponseDocument::Search(search) = response else {
+            return Err(AgyError::OutputInvalid);
+        };
+        let evidence = match SearchSourceEvidence::fetch(search, context.deadline.instant()).await {
+            Ok(evidence) => evidence,
+            Err(AgyError::OutputInvalid) => return Ok(StandardSearchRun::NoReachableResults),
+            Err(error) => return Err(error),
+        };
+        if evidence.verify_and_project(search).is_err() {
+            return Ok(StandardSearchRun::NoReachableResults);
+        }
     }
     Ok(run)
 }

@@ -11,7 +11,10 @@ use crate::{
     invocation::{Invocation, InvocationCommand},
     process::{ProcessRequest, run},
     response::Document as ResponseDocument,
-    types::{Effort, ModelCatalog, ModelSlug, Operation, PreferredSearchModel, VerificationMode},
+    types::{
+        Effort, GeminiFlashGeneration, ModelCatalog, ModelSlug, Operation, PreferredModel,
+        VerificationMode,
+    },
 };
 
 mod content;
@@ -68,7 +71,7 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
                     ContentModels::fixed(Some(selected))
                 }
                 None => {
-                    select_preferred_search_models(&agy_path, &cwd, deadline, &request, effort)
+                    select_preferred_content_models(&agy_path, &cwd, deadline, &request, effort)
                         .await?
                 }
             };
@@ -128,28 +131,43 @@ async fn validate_model(
     }
 }
 
-async fn select_preferred_search_models(
+async fn select_preferred_content_models(
     executable: &str,
     cwd: &Path,
     deadline: Deadline,
     request: &crate::request::ContentRequest,
     effort: Option<Effort>,
 ) -> Result<ContentModels, AgyError> {
-    let Some(preferred) =
-        preferred_search_model(request.operation(), request.verification(), effort)
+    let Some(preference) =
+        preferred_model_policy(request.operation(), request.verification(), effort)
     else {
         return Ok(ContentModels::fixed(None));
     };
     let timeout = deadline.remaining()?.min(MAX_ADVISORY_CATALOG_DISCOVERY);
     match discover_models(executable, cwd.to_path_buf(), timeout).await {
         Ok(catalog) => {
-            let primary = catalog.preferred(preferred);
-            let Some(_) = primary else {
+            let primary = catalog.preferred(preference.primary);
+            let Some(primary_model) = primary.clone() else {
                 return Ok(ContentModels::fixed(None));
             };
-            let medium = catalog.preferred(PreferredSearchModel::Medium);
-            let high = catalog.preferred(PreferredSearchModel::High);
-            let recoveries = match (medium, high) {
+            let Some(recovery_generation) = preference.recovery_generation else {
+                return Ok(ContentModels {
+                    primary,
+                    recoveries: [
+                        RecoveryModel::Selected(primary_model.clone()),
+                        RecoveryModel::Selected(primary_model),
+                    ],
+                });
+            };
+            let first_recovery = catalog.preferred(PreferredModel::gemini_flash(
+                recovery_generation,
+                Effort::Medium,
+            ));
+            let final_recovery = catalog.preferred(PreferredModel::gemini_flash(
+                recovery_generation,
+                Effort::High,
+            ));
+            let recoveries = match (first_recovery, final_recovery) {
                 (Some(medium), Some(high)) => [
                     RecoveryModel::Selected(medium),
                     RecoveryModel::Selected(high),
@@ -169,19 +187,41 @@ async fn select_preferred_search_models(
     }
 }
 
-const fn preferred_search_model(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ModelPreference {
+    primary: PreferredModel,
+    recovery_generation: Option<GeminiFlashGeneration>,
+}
+
+const fn preferred_model_policy(
     operation: Operation,
     verification: VerificationMode,
     effort: Option<Effort>,
-) -> Option<PreferredSearchModel> {
-    match operation {
-        Operation::Search => match verification {
-            VerificationMode::Standard => match effort {
-                Some(Effort::Low) => Some(PreferredSearchModel::Low),
-                Some(Effort::Medium | Effort::High) | None => None,
-            },
-            VerificationMode::TemporalComparison => None,
-        },
-        Operation::Extract | Operation::Map | Operation::Crawl | Operation::Research => None,
-    }
+) -> Option<ModelPreference> {
+    let Some(effort) = effort else {
+        return None;
+    };
+    let (generation, recovery_generation) = match (operation, verification, effort) {
+        (Operation::Search, VerificationMode::Standard, Effort::Low) => (
+            GeminiFlashGeneration::V3_7,
+            Some(GeminiFlashGeneration::V3_7),
+        ),
+        (Operation::Search, VerificationMode::Standard, Effort::Medium | Effort::High) => {
+            (GeminiFlashGeneration::V3_7, None)
+        }
+        (
+            Operation::Search,
+            VerificationMode::TemporalComparison,
+            Effort::Low | Effort::Medium | Effort::High,
+        )
+        | (
+            Operation::Extract | Operation::Map | Operation::Crawl | Operation::Research,
+            VerificationMode::Standard | VerificationMode::TemporalComparison,
+            Effort::Low | Effort::Medium | Effort::High,
+        ) => (GeminiFlashGeneration::V3_7, None),
+    };
+    Some(ModelPreference {
+        primary: PreferredModel::gemini_flash(generation, effort),
+        recovery_generation,
+    })
 }

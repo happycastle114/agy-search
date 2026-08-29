@@ -63,13 +63,52 @@ fn executes_all_five_content_operations() {
 }
 
 #[test]
+fn extracts_multiple_urls_as_ordered_isolated_runs() -> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let trace = temporary.path().join("extract-trace.jsonl");
+    let mut invocation = command();
+    let assertion = invocation
+        .env("AGY_SEARCH_FIXTURE_TRACE", &trace)
+        .args([
+            "extract",
+            "https://example.com/first",
+            "https://example.com/second",
+        ])
+        .assert()
+        .success();
+    let document: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    assert_eq!(
+        document.pointer("/results/0/url"),
+        Some(&json!("https://example.com/first"))
+    );
+    assert_eq!(
+        document.pointer("/results/1/url"),
+        Some(&json!("https://example.com/second"))
+    );
+    let traces = std::fs::read_to_string(trace)?
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(traces.len(), 2);
+    assert!(
+        traces
+            .iter()
+            .all(|record| record.get("query") == Some(&Value::Null))
+    );
+    Ok(())
+}
+
+#[test]
 fn reads_search_query_from_stdin() {
     command()
         .args(["--model", "fixture-model", "search", "-", "--json"])
         .write_stdin("stdin query\n")
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"snippet\": \"stdin query\""));
+        .stdout(predicate::str::contains(
+            "\"snippet\": \"Verified generic search evidence appears in this deterministic source body.\"",
+        ));
 }
 
 #[test]

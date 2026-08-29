@@ -51,14 +51,19 @@ def run_research(
     tool_counts = {
         "research-five-tools": (2, 3),
         "research-seven-tools": (2, 5),
+        "research-nine-tools": (2, 7),
         "research-ten-tools": (2, 8),
         "research-eleven-tools": (2, 9),
+        "research-twelve-tools": (2, 10),
+        "research-thirteen-tools": (2, 11),
     }
     raw_query = str(payload["query"])
     read_only_url = direct_read_url(raw_query)
-    search_count, read_count = tool_counts.get(raw_query, (1, 0))
+    response_urls = source_urls(response)
+    search_count, read_count = tool_counts.get(raw_query, (1, len(response_urls)))
     if read_only_url is not None:
         search_count, read_count = (0, 1)
+    read_urls = [response_urls[index % len(response_urls)] for index in range(read_count)]
     emit(
         response,
         "search_web",
@@ -67,9 +72,21 @@ def run_research(
         additional_tool="read_url_content" if read_count else None,
         additional_tool_count=read_count,
         scenario_override=raw_query,
-        additional_tool_url=read_only_url,
+        additional_tool_url=read_only_url or read_urls,
     )
     return 0
+
+
+def source_urls(response: dict[str, JsonValue]) -> list[str]:
+    sources = response.get("sources")
+    if not isinstance(sources, list):
+        return []
+    return [
+        url
+        for source_item in sources
+        if isinstance(source_item, dict)
+        and isinstance((url := source_item.get("url")), str)
+    ]
 
 
 def direct_read_url(raw_query: str) -> str | None:
@@ -101,7 +118,11 @@ def restricted_response(raw_query: str) -> dict[str, JsonValue] | None:
     allowed = (
         "https://v.daum.net/v/20260807120301584"
         if raw_query == "source-research-news-portal"
-        else "https://doc.rust-lang.org/book/"
+        else (
+            "https://rust-lang.org/"
+            if raw_query == "source-research-domain-root"
+            else "https://doc.rust-lang.org/book/"
+        )
     )
     disallowed = "https://contributor.example/rust-release"
     sources = [source("Allowed", allowed, "2026-08-03")]
@@ -208,7 +229,10 @@ def standard_date_response(raw_query: str) -> dict[str, JsonValue] | None:
         public_date, source_date_text = scenarios[raw_query]
         candidate = audit_candidate("primary fixture", "Evidence", source_url, public_date)
         candidate["source_date_text"] = source_date_text
-        candidate["evidence_excerpt"] = f"Published {source_date_text}"
+        candidate["evidence_excerpt"] = (
+            "Verified source body contains Evidence as exact supported fixture evidence. "
+            f"Published {source_date_text}."
+        )
         public_source = source("Evidence", source_url, public_date)
     elif raw_query == "standard-malformed-update":
         candidate = audit_candidate("primary fixture", "Evidence", source_url, None)

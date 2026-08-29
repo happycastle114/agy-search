@@ -5,6 +5,19 @@ use std::path::Path;
 use assert_cmd::Command;
 use predicates::prelude::*;
 
+fn research_command() -> Command {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
+    command
+        .arg("--agy-path")
+        .arg(root.join("tests/fixtures/fake_agy.py"))
+        .env(
+            "AGY_SEARCH_CURL_PATH",
+            root.join("tests/fixtures/fake_curl.py"),
+        );
+    command
+}
+
 #[test]
 fn standard_search_rejects_more_than_two_completed_research_calls() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
@@ -95,13 +108,10 @@ fn temporal_search_allows_discovery_and_exact_date_followups_per_scope() {
 #[test]
 fn synthesis_research_allows_five_attempts_with_four_sources() {
     // Given two searches and three reads for a four-source synthesis request.
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
+    let mut command = research_command();
 
-    // When/Then all five legitimate attempts complete below the derived budget of six.
+    // When/Then all five legitimate attempts complete below the derived budget of nine.
     command
-        .arg("--agy-path")
-        .arg(fixture)
         .args(["research", "research-five-tools", "--max-sources", "4"])
         .assert()
         .success();
@@ -109,15 +119,15 @@ fn synthesis_research_allows_five_attempts_with_four_sources() {
 
 #[test]
 fn synthesis_research_rejects_attempts_above_derived_budget() {
-    // Given seven completed attempts for a four-source synthesis request.
+    // Given ten completed attempts for a four-source synthesis request.
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
 
-    // When/Then the seventh attempt exceeds the derived budget of six and fails closed.
+    // When/Then the tenth attempt exceeds the derived budget of nine and fails closed.
     command
         .arg("--agy-path")
         .arg(fixture)
-        .args(["research", "research-seven-tools", "--max-sources", "4"])
+        .args(["research", "research-ten-tools", "--max-sources", "4"])
         .assert()
         .code(6)
         .stdout(predicate::str::is_empty())
@@ -125,23 +135,20 @@ fn synthesis_research_rejects_attempts_above_derived_budget() {
 }
 
 #[test]
-fn deep_research_accepts_exact_ten_attempt_boundary() {
-    // Given ten completed attempts for an eight-source deep request.
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
+fn deep_research_accepts_exact_twelve_attempt_boundary() {
+    // Given twelve completed attempts for an eight-source deep request.
+    let mut command = research_command();
 
     // When/Then the exact derived budget boundary remains valid.
     command
-        .arg("--agy-path")
-        .arg(fixture)
-        .args(["research", "research-ten-tools", "--max-sources", "8"])
+        .args(["research", "research-twelve-tools", "--max-sources", "8"])
         .assert()
         .success();
 }
 
 #[test]
-fn deep_research_rejects_attempts_above_ten_attempt_boundary() {
-    // Given eleven completed attempts for an eight-source deep request.
+fn deep_research_rejects_attempts_above_twelve_attempt_boundary() {
+    // Given thirteen completed attempts for an eight-source deep request.
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_agy.py");
     let mut command = Command::new(env!("CARGO_BIN_EXE_agy-search"));
 
@@ -149,7 +156,7 @@ fn deep_research_rejects_attempts_above_ten_attempt_boundary() {
     command
         .arg("--agy-path")
         .arg(fixture)
-        .args(["research", "research-eleven-tools", "--max-sources", "8"])
+        .args(["research", "research-thirteen-tools", "--max-sources", "8"])
         .assert()
         .code(6)
         .stdout(predicate::str::is_empty())

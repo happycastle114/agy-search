@@ -59,6 +59,14 @@ pub(super) fn assess_tool_attempts(events: &[Event]) -> ToolAttemptAssessment {
                     return ToolAttemptAssessment::Unsafe;
                 }
             }
+            ToolName::Finish => {
+                let Some(current) = current.as_ref() else {
+                    return ToolAttemptAssessment::Unsafe;
+                };
+                if !attempts.track_finish(tool_step, current) {
+                    return ToolAttemptAssessment::Unsafe;
+                }
+            }
             ToolName::Other => saw_unlisted_tool = true,
         }
     }
