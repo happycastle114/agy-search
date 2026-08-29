@@ -43,6 +43,7 @@ pub(super) fn project_unbound_standard_dates(
 ) -> Result<(), AgyError> {
     validate_syntax(sources)?;
     for source in sources {
+        source.last_updated = None;
         let Some(public_date) = source.date.as_deref() else {
             continue;
         };
@@ -217,6 +218,21 @@ mod tests {
         // Then: the source survives while the unsupported exact day does not.
         assert!(result.is_ok());
         assert_eq!(sources[0].date, None);
+    }
+
+    #[test]
+    fn standard_projection_clears_an_update_without_a_dedicated_audit_binding() {
+        let mut sources = [source(&serde_json::Value::Null, &json!("2026-08-04"))];
+        let evidence = audit(
+            &serde_json::Value::Null,
+            &serde_json::Value::Null,
+            &json!("Updated August 4, 2026"),
+        );
+
+        let result = project_unbound_standard_dates(&mut sources, &evidence);
+
+        assert!(result.is_ok());
+        assert_eq!(sources[0].last_updated, None);
     }
 
     #[test]

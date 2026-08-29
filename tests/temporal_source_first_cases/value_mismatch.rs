@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn temporal_comparison_does_not_treat_a_local_first_row_as_truth_when_primary_value_differs()
+fn exact_temporal_comparison_uses_unique_latest_local_rows_when_primary_values_differ()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: strong local rows whose values differ from both primary candidates.
     let temporary = TempDir::new()?;
@@ -12,7 +12,7 @@ fn temporal_comparison_does_not_treat_a_local_first_row_as_truth_when_primary_va
         "https://example.com/beta",
     ];
 
-    // When: recovery evaluates the locally parsed facts against primary values.
+    // When: exact-source recovery evaluates the locally parsed latest facts.
     let assertion = temporal_search(
         command,
         TemporalSearchFixture {
@@ -25,11 +25,11 @@ fn temporal_comparison_does_not_treat_a_local_first_row_as_truth_when_primary_va
     .success();
     let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
 
-    // Then: no local value is promoted; the existing all-scope fallback runs.
+    // Then: the unique latest exact-source value is promoted without a scoped model call.
     assert_eq!(
         response.pointer("/results/0/title"),
-        Some(&json!("alpha-v2"))
+        Some(&json!("alpha alpha-v2"))
     );
-    assert_recovery_trace(&trace_scopes(&agy_trace)?);
+    assert_eq!(trace_scopes(&agy_trace)?, vec![None]);
     Ok(())
 }

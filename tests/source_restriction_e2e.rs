@@ -142,6 +142,31 @@ fn exact_source_url_is_an_output_allowlist_with_same_url_body_proof()
 }
 
 #[test]
+fn mixed_search_fetches_and_binds_a_domain_discovered_result()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let curl_trace = temporary.path().join("curl.jsonl");
+
+    command()
+        .env("AGY_SEARCH_SOURCE_FETCH_TRACE", &curl_trace)
+        .args([
+            "search",
+            "source-domain-subdomain",
+            "--domain",
+            "rust-lang.org",
+            "--source-url",
+            "https://example.com/source",
+        ])
+        .assert()
+        .success();
+
+    let trace = std::fs::read_to_string(curl_trace)?;
+    assert!(trace.contains("https://example.com/source"));
+    assert!(trace.contains("https://doc.rust-lang.org/book/"));
+    Ok(())
+}
+
+#[test]
 fn standard_research_refetches_and_accepts_an_exact_source_url()
 -> Result<(), Box<dyn std::error::Error>> {
     let temporary = TempDir::new()?;
@@ -164,10 +189,69 @@ fn standard_research_refetches_and_accepts_an_exact_source_url()
 }
 
 #[test]
-fn exact_url_research_accepts_a_paired_direct_read_without_search() {
-    // Given: a caller-owned exact source URL and a Research fixture with no search event.
-    // When: the fixture completes a same-conversation read_url_content pair for that URL.
-    // Then: the CLI accepts the exact-source result as web-evidenced.
+fn mixed_research_fetches_and_binds_a_domain_discovered_source()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let curl_trace = temporary.path().join("curl.jsonl");
+
+    command()
+        .env("AGY_SEARCH_SOURCE_FETCH_TRACE", &curl_trace)
+        .args([
+            "research",
+            "source-research-allowed",
+            "--domain",
+            "rust-lang.org",
+            "--source-url",
+            "https://example.com/source",
+        ])
+        .assert()
+        .success();
+
+    let trace = std::fs::read_to_string(curl_trace)?;
+    assert!(trace.contains("https://example.com/source"));
+    assert!(trace.contains("https://doc.rust-lang.org/book/"));
+    Ok(())
+}
+
+#[test]
+fn mixed_research_recovery_keeps_search_discovery_and_body_binding()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let agy_trace = temporary.path().join("agy.jsonl");
+    let curl_trace = temporary.path().join("curl.jsonl");
+
+    command()
+        .env("AGY_SEARCH_FIXTURE_TRACE", &agy_trace)
+        .env("AGY_SEARCH_SOURCE_FETCH_TRACE", &curl_trace)
+        .args([
+            "research",
+            "source-research-mixed-retry",
+            "--domain",
+            "rust-lang.org",
+            "--source-url",
+            "https://example.com/source",
+        ])
+        .assert()
+        .success();
+
+    assert_eq!(std::fs::read_to_string(agy_trace)?.lines().count(), 2);
+    let source_trace = std::fs::read_to_string(curl_trace)?;
+    assert!(source_trace.contains("https://example.com/source"));
+    assert_eq!(
+        source_trace
+            .lines()
+            .filter(|line| line.contains("https://doc.rust-lang.org/book/"))
+            .count(),
+        2
+    );
+    Ok(())
+}
+
+#[test]
+fn exact_url_research_accepts_wrapper_prefetched_evidence_without_tools() {
+    // Given: a caller-owned exact source URL and a Research fixture with no tool event.
+    // When: the wrapper safely prefetches that exact URL before model synthesis.
+    // Then: the CLI accepts the exact-source result as independently evidenced.
     command()
         .args([
             "research",

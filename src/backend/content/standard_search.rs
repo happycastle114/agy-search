@@ -3,9 +3,8 @@
 use crate::{
     error::AgyError,
     prompt::{build_standard_search_final_retry_prompt, build_standard_search_retry_prompt},
-    research_source_evidence::SearchSourceEvidence,
+    research_source_evidence::{SearchSourceEvidence, SourceEvidenceSnapshot},
     response::Document as ResponseDocument,
-    types::{Operation, ResearchToolPolicy},
 };
 
 use super::execution::{
@@ -15,12 +14,23 @@ use super::execution::{
 
 pub(super) async fn run_standard_search(
     context: &ExecutionContext,
-    operation: Operation,
-    tool_policy: ResearchToolPolicy,
-    schema: String,
-    prompt: String,
+    execution: ContentExecution,
     request_json: &str,
+    prefetched_evidence: Option<&SourceEvidenceSnapshot>,
 ) -> Result<ResponseDocument, AgyError> {
+    let ContentExecution {
+        operation,
+        tool_policy,
+        schema,
+        prompt,
+    } = execution;
+    let uses_prefetched_evidence = tool_policy.maximum() == 0;
+    let verification_evidence = if uses_prefetched_evidence {
+        prefetched_evidence
+    } else {
+        None
+    };
+    let prefetched_retry_prompt = uses_prefetched_evidence.then(|| prompt.clone());
     let first = validate_standard_run(
         run_standard_search_unvalidated_once(
             context,
@@ -33,6 +43,7 @@ pub(super) async fn run_standard_search(
         )
         .await?,
         context,
+        verification_evidence,
     )
     .await?;
     match first {
@@ -43,6 +54,9 @@ pub(super) async fn run_standard_search(
             let Some(retry_context) = context.for_recovery(RecoveryStage::First) else {
                 return Err(AgyError::OutputInvalid);
             };
+            let retry_prompt = prefetched_retry_prompt
+                .clone()
+                .unwrap_or_else(|| build_standard_search_retry_prompt(request_json));
             let second = validate_standard_run(
                 run_standard_search_unvalidated_once(
                     &retry_context,
@@ -50,11 +64,12 @@ pub(super) async fn run_standard_search(
                         operation,
                         tool_policy: tool_policy.clone(),
                         schema: schema.clone(),
-                        prompt: build_standard_search_retry_prompt(request_json),
+                        prompt: retry_prompt,
                     },
                 )
                 .await?,
                 &retry_context,
+                verification_evidence,
             )
             .await?;
             match second {
@@ -66,6 +81,8 @@ pub(super) async fn run_standard_search(
                     else {
                         return Err(AgyError::OutputInvalid);
                     };
+                    let final_prompt = prefetched_retry_prompt
+                        .unwrap_or_else(|| build_standard_search_final_retry_prompt(request_json));
                     let third = validate_standard_run(
                         run_standard_search_unvalidated_once(
                             &final_retry_context,
@@ -73,11 +90,12 @@ pub(super) async fn run_standard_search(
                                 operation,
                                 tool_policy,
                                 schema,
-                                prompt: build_standard_search_final_retry_prompt(request_json),
+                                prompt: final_prompt,
                             },
                         )
                         .await?,
                         &final_retry_context,
+                        verification_evidence,
                     )
                     .await?;
                     match third {
@@ -97,6 +115,7 @@ pub(super) async fn run_standard_search(
 async fn validate_standard_run(
     mut run: StandardSearchRun,
     context: &ExecutionContext,
+    prefetched_evidence: Option<&SourceEvidenceSnapshot>,
 ) -> Result<StandardSearchRun, AgyError> {
     if let StandardSearchRun::Response(response) = &mut run {
         if response.validate_search_document().is_err()
@@ -107,10 +126,13 @@ async fn validate_standard_run(
         let ResponseDocument::Search(search) = response else {
             return Err(AgyError::OutputInvalid);
         };
-        let evidence = match SearchSourceEvidence::fetch(search, context.deadline.instant()).await {
-            Ok(evidence) => evidence,
-            Err(AgyError::OutputInvalid) => return Ok(StandardSearchRun::NoReachableResults),
-            Err(error) => return Err(error),
+        let evidence = match prefetched_evidence {
+            Some(evidence) => SearchSourceEvidence::from_prefetched(evidence),
+            None => match SearchSourceEvidence::fetch(search, context.deadline.instant()).await {
+                Ok(evidence) => evidence,
+                Err(AgyError::OutputInvalid) => return Ok(StandardSearchRun::NoReachableResults),
+                Err(error) => return Err(error),
+            },
         };
         if evidence.verify_and_project(search).is_err() {
             return Ok(StandardSearchRun::NoReachableResults);

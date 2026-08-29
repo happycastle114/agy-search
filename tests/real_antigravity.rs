@@ -1,6 +1,6 @@
 //! Opt-in compatibility gate against a signed-in real Antigravity CLI.
 
-use std::{env, io, process::Command};
+use std::{env, io, process::Command, time::Instant};
 
 use serde_json::Value;
 
@@ -43,7 +43,14 @@ fn real_stream_json_model_and_all_content_operations() -> Result<(), Box<dyn std
 
     let scenarios: [(&[&str], &str); 5] = [
         (
-            &["search", "IANA Example Domain official website", "-n", "2"],
+            &[
+                "search",
+                "What are IANA example domains reserved for?",
+                "--source-url",
+                "https://www.iana.org/help/example-domains",
+                "-n",
+                "1",
+            ],
             "search",
         ),
         (&["extract", "https://example.com/"], "extract"),
@@ -63,13 +70,16 @@ fn real_stream_json_model_and_all_content_operations() -> Result<(), Box<dyn std
             &[
                 "research",
                 "Explain the purpose of IANA Example Domain using primary sources",
+                "--source-url",
+                "https://www.iana.org/help/example-domains",
                 "--max-sources",
-                "3",
+                "1",
             ],
             "research",
         ),
     ];
     for (operation_args, expected) in scenarios {
+        let started = Instant::now();
         let mut arguments = common.to_vec();
         arguments.extend(["--model", model.as_str(), "--effort", "low"]);
         arguments.extend_from_slice(operation_args);
@@ -78,6 +88,10 @@ fn real_stream_json_model_and_all_content_operations() -> Result<(), Box<dyn std
         assert_eq!(
             response.get("object").and_then(Value::as_str),
             Some(expected)
+        );
+        println!(
+            "real operation PASS operation={expected} elapsed={:.2}s",
+            started.elapsed().as_secs_f64()
         );
     }
     Ok(())

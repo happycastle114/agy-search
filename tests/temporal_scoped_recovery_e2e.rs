@@ -34,7 +34,7 @@ fn temporal_comparison_recovers_each_complete_scope_and_selects_unique_latest()
     // Then: one primary plus one scoped run per label yields alpha's exact newer source.
     assert_eq!(
         response.pointer("/results/0/url"),
-        Some(&json!("https://example.com/alpha"))
+        Some(&json!("https://example.com/recovery-alpha"))
     );
     assert_eq!(
         response.pointer("/results/0/date"),
@@ -100,7 +100,9 @@ fn temporal_recovery_rejects_scoped_query_and_tool_policy_violations() {
         "temporal-recoverable-three-searches",
     ] {
         // When: the public CLI parses the scoped stream-json evidence.
-        let assertion = recovery_search(command(), query).assert();
+        let assertion = recovery_search(command(), query)
+            .args(["--domain", "docs.example", "--domain", "support.example"])
+            .assert();
 
         // Then: recovery fails closed at the public error boundary.
         assertion
@@ -112,7 +114,7 @@ fn temporal_recovery_rejects_scoped_query_and_tool_policy_violations() {
 
 #[test]
 fn temporal_recovery_accepts_one_exact_value_followup() {
-    // Given: each scoped run searches the exact request, then appends only its version token.
+    // Given: exact caller-owned pages can prove each scoped tuple without discovery.
     let assertion = recovery_search(command(), "temporal-recoverable-value-followup")
         .assert()
         .success();
@@ -122,7 +124,7 @@ fn temporal_recovery_accepts_one_exact_value_followup() {
         serde_json::from_slice(&assertion.get_output().stdout).expect("response must be JSON");
     assert_eq!(
         response.pointer("/results/0/title"),
-        Some(&json!("alpha-v2"))
+        Some(&json!("alpha alpha-v2"))
     );
     assert_eq!(
         response.pointer("/results/0/date"),
@@ -139,6 +141,7 @@ fn temporal_comparison_discards_every_scope_when_one_recovery_is_invalid()
 
     // When: temporal search runs through the public CLI.
     recovery_search(command, "temporal-recoverable-one-invalid")
+        .args(["--domain", "docs.example", "--domain", "support.example"])
         .assert()
         .code(6)
         .stdout(predicate::str::is_empty())
@@ -160,6 +163,7 @@ fn temporal_comparison_rejects_a_recovered_tuple_borrowed_from_a_sibling_panel()
 
     // When: source-backed temporal recovery runs through the public CLI.
     recovery_search(command, "temporal-recoverable-borrowed")
+        .args(["--domain", "docs.example", "--domain", "support.example"])
         .env("AGY_SEARCH_SOURCE_FETCH_TRACE", &source_trace)
         .assert()
         .code(6)
@@ -176,16 +180,19 @@ fn temporal_comparison_rejects_a_recovered_tuple_borrowed_from_a_sibling_panel()
     let both_scopes = vec![Some("alpha".to_owned()), Some("beta".to_owned())];
     assert!(recovered == beta_only || recovered == both_scopes);
 
-    // Every caller-owned source was still fetched exactly once before scoped
-    // recovery, so cancellation cannot weaken the shared source contract.
+    // Mixed exact-plus-domain recovery uses one bounded prefetch for prompt
+    // evidence and one independent source-contract fetch before scoped recovery.
     let mut fetched = source_trace_urls(&source_trace)?;
     fetched.sort();
     assert_eq!(
         fetched,
         vec![
-            "https://example.com/alpha".to_owned(),
-            "https://example.com/beta".to_owned(),
             "https://example.com/primary".to_owned(),
+            "https://example.com/primary".to_owned(),
+            "https://example.com/recovery-alpha".to_owned(),
+            "https://example.com/recovery-alpha".to_owned(),
+            "https://example.com/recovery-beta".to_owned(),
+            "https://example.com/recovery-beta".to_owned(),
         ]
     );
     Ok(())

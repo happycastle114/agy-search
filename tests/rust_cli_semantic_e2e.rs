@@ -94,7 +94,7 @@ fn internal_evidence_audit_is_not_exposed_in_public_search_json() {
 }
 
 #[test]
-fn preserves_explicit_date_metadata_without_inventing_updates() {
+fn preserves_bound_publication_dates_without_exposing_unbound_updates() {
     let search = json_stdout(&[
         "--model",
         "fixture-model",
@@ -119,7 +119,7 @@ fn preserves_explicit_date_metadata_without_inventing_updates() {
     );
     assert_eq!(
         with_update.pointer("/results/0/last_updated"),
-        Some(&json!("2026-08-04"))
+        Some(&Value::Null)
     );
 
     let without_metadata = json_stdout(&["search", "undated-source"]);

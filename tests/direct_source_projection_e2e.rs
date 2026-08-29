@@ -72,6 +72,33 @@ fn projects_reachable_direct_results_and_prunes_dead_rows() -> Result<(), Box<dy
 }
 
 #[test]
+fn keeps_a_verified_page_when_a_sibling_body_is_unreadable()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, _redirect_trace, _invocation_trace) = command(&temporary)?;
+
+    let assertion = command
+        .env("AGY_REDIRECT_MODE", "source-partial")
+        .args(["search", "standard-source-partial"])
+        .assert()
+        .success();
+    let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
+
+    assert_eq!(
+        response.pointer("/results/0/url"),
+        Some(&json!("https://example.com/readable"))
+    );
+    assert_eq!(
+        response
+            .get("results")
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(1)
+    );
+    Ok(())
+}
+
+#[test]
 fn replaces_a_direct_redirect_with_its_terminal_public_url()
 -> Result<(), Box<dyn std::error::Error>> {
     let temporary = tempfile::tempdir()?;
@@ -169,7 +196,6 @@ fn preserves_a_caller_restricted_news_portal_source() -> Result<(), Box<dyn std:
 fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
 -> Result<(), Box<dyn std::error::Error>> {
     for query in [
-        "standard-direct-http-first",
         "standard-direct-private-first",
         "standard-direct-localhost-dot-first",
         "standard-direct-dead-first",
@@ -191,5 +217,21 @@ fn retries_once_after_unsafe_dead_or_regional_google_direct_output()
         );
         assert_eq!(line_count(&invocation_trace)?, 2, "query: {query}");
     }
+    Ok(())
+}
+
+#[test]
+fn rejects_an_http_model_source_without_retrying_or_fetching()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = tempfile::tempdir()?;
+    let (mut command, redirect_trace, invocation_trace) = command(&temporary)?;
+
+    command
+        .args(["search", "standard-direct-http-first"])
+        .assert()
+        .code(6);
+
+    assert!(!redirect_trace.exists());
+    assert_eq!(line_count(&invocation_trace)?, 1);
     Ok(())
 }

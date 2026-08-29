@@ -88,7 +88,7 @@ fn projects_public_snippet_from_the_same_url_body() {
         "summary": "Summary",
         "findings": [{
             "title": "Thinking levels",
-            "summary": "The supported levels are documented.",
+            "summary": "The supported levels are low, medium, high.",
             "citations": ["https://example.com/thinking"]
         }],
         "sources": [{

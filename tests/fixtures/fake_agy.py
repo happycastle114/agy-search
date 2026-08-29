@@ -23,6 +23,7 @@ def emit(
     additional_tool_count: int = 1,
     scenario_override: str | None = None,
     failed_tool_before: str | None = None,
+    tool_url: str | None = None,
 ) -> None:
     evidence_audit = structured_output.get("evidence_audit")
     scenario = scenario_override or (
@@ -56,9 +57,11 @@ def emit(
     for tool_index in range(tool_count):
         active_query = followup_query if tool_index > 0 and followup_query else query
         tool_info: dict[str, object] = {"name": tool}
-        if active_query is not None:
+        if tool_url is not None:
+            tool_info["parameters"] = {"Url": tool_url}
+        elif active_query is not None:
             tool_info["parameters"] = {"query": active_query}
-        if active_query is not None:
+        if active_query is not None or tool_url is not None:
             events.append(
                 {
                     "event": "step_update",
@@ -199,7 +202,8 @@ def run_operation() -> int:
                     for url in payload["urls"]
                 ],
             },
-            "read_url_content",
+            "search_web",
+            0,
         )
         return 0
     if operation in {"map", "crawl"}:
@@ -216,7 +220,8 @@ def run_operation() -> int:
         results = [] if payload.get("instructions") == "empty" else [result]
         emit(
             {"object": operation, "base_url": base_url, "results": results},
-            "read_url_content",
+            "search_web",
+            2 if payload.get("instructions") == "two-tools" else 1,
         )
         return 0
     if operation == "research":

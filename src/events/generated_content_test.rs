@@ -90,7 +90,7 @@ fn inspection_case(conversation: &str, active: &Path, done: &Path) -> String {
 }
 
 #[test]
-fn valid_generated_inspection_is_budget_neutral() {
+fn generated_inspection_is_rejected_even_for_a_read_artifact() {
     // Given successful web evidence and inspections of its generated artifact.
     let path = content_path("current-conversation", 3);
     let mut steps = search_and_read();
@@ -104,12 +104,12 @@ fn valid_generated_inspection_is_budget_neutral() {
         &policy(ResearchToolBudget::StandardSearch),
     );
 
-    // Then generated inspections remain budget-neutral and the positive run passes.
-    assert!(parsed.is_ok());
+    // Then local inspection is unavailable at the agent boundary and rejected in depth.
+    assert!(parsed.is_err());
 }
 
 #[test]
-fn valid_generated_grep_step_directory_is_budget_neutral() {
+fn generated_grep_is_rejected_even_for_the_producer_directory() {
     // Given Antigravity's live grep shape: SearchPath is the completed read's step directory.
     let content = content_path("current-conversation", 3);
     let directory = content
@@ -123,13 +123,13 @@ fn valid_generated_grep_step_directory_is_budget_neutral() {
         &grep(directory),
     ));
 
-    // When/Then the exact producer directory is safe and remains web-budget neutral.
+    // When/Then even a generated producer directory cannot authorize local file access.
     let parsed = parse_structured_run(
         stream(steps).as_bytes(),
         Operation::Search,
         &policy(ResearchToolBudget::StandardSearch),
     );
-    assert!(parsed.is_ok());
+    assert!(parsed.is_err());
 }
 
 #[test]

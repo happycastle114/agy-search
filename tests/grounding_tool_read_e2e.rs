@@ -4,7 +4,6 @@ use std::fs;
 
 use assert_cmd::Command;
 use predicates::prelude::*;
-use serde_json::{Value, json};
 use tempfile::TempDir;
 
 const FAKE_AGY: &str = r#"#!/usr/bin/env python3
@@ -123,14 +122,14 @@ fn command(fixtures: &Fixtures, final_mode: &str) -> Command {
 }
 
 #[test]
-fn grounding_tool_read_resolves_to_exact_allowed_source_before_exposure()
+fn exact_url_restriction_rejects_discovery_before_grounding_resolution()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: a restricted exact source, a grounding tool read, and direct terminal output.
     let temporary = TempDir::new()?;
     let fixtures = fixtures(&temporary)?;
 
-    // When: the tool transport resolves to the exact caller-owned source.
-    let assertion = command(&fixtures, "allowed")
+    // When/Then: exact-URL mode rejects the preceding discovery search.
+    command(&fixtures, "allowed")
         .args([
             "search",
             "grounding tool read",
@@ -138,15 +137,10 @@ fn grounding_tool_read_resolves_to_exact_allowed_source_before_exposure()
             "https://example.com/canonical",
         ])
         .assert()
-        .success();
-
-    // Then: only the already-direct structured URL is exposed.
-    let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
-    assert_eq!(
-        response.pointer("/results/0/url"),
-        Some(&json!("https://example.com/canonical"))
-    );
-    assert_eq!(fs::read_to_string(&fixtures.trace)?.lines().count(), 2);
+        .code(6)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::eq("error: agy output invalid\n"));
+    assert!(!fixtures.trace.exists());
     Ok(())
 }
 
@@ -173,27 +167,19 @@ fn grounding_tool_read_rejects_a_final_url_outside_exact_source()
 }
 
 #[test]
-fn unrestricted_tool_read_does_not_resolve_the_hidden_transport()
+fn unrestricted_tool_read_attempt_fails_before_any_wrapper_fetch()
 -> Result<(), Box<dyn std::error::Error>> {
     // Given: an unrestricted run with a grounding tool read and direct terminal output.
     let temporary = TempDir::new()?;
     let fixtures = fixtures(&temporary)?;
 
-    // When: the ordinary unrestricted search succeeds.
+    // When/Then: even unrestricted discovery rejects the model-controlled read.
     command(&fixtures, "allowed")
         .args(["search", "grounding tool read"])
         .assert()
-        .success();
-
-    // Then: only the public direct result is probed; the hidden transport is untouched.
-    let records = fs::read_to_string(&fixtures.trace)?
-        .lines()
-        .map(serde_json::from_str::<Value>)
-        .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(records.len(), 1);
-    assert_eq!(
-        records.first().and_then(|record| record.get("url")),
-        Some(&json!("https://example.com/canonical"))
-    );
+        .code(6)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::eq("error: agy output invalid\n"));
+    assert!(!fixtures.trace.exists());
     Ok(())
 }

@@ -60,6 +60,10 @@ impl ResearchAttemptBudget {
     const ATTEMPTS_PER_SOURCE: u16 = 2;
     const DISCOVERY_OVERHEAD: u16 = 1;
 
+    pub(crate) const fn none() -> Self {
+        Self(0)
+    }
+
     pub(crate) fn from_max_sources(max_sources: u16) -> Self {
         Self(
             max_sources
@@ -76,8 +80,8 @@ impl ResearchAttemptBudget {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ResearchToolBudget {
-    Single,
-    DirectReads(usize),
+    SiteDiscovery,
+    PrefetchedEvidence,
     StandardSearch,
     TemporalSearch,
     Research(ResearchAttemptBudget),
@@ -117,9 +121,8 @@ impl ResearchToolPolicy {
 impl ResearchToolBudget {
     pub(crate) fn maximum(self) -> usize {
         match self {
-            Self::Single => 1,
-            Self::DirectReads(maximum) => maximum,
-            Self::StandardSearch => 2,
+            Self::PrefetchedEvidence => 0,
+            Self::SiteDiscovery | Self::StandardSearch => 2,
             Self::TemporalSearch => 8,
             Self::Research(budget) => budget.maximum(),
         }

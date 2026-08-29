@@ -11,6 +11,7 @@ use crate::{
     invocation::{Invocation, InvocationCommand},
     process::{ProcessRequest, run},
     response::Document as ResponseDocument,
+    source_network::{SafeSourceUrl, SourceNetworkError, resolve},
     types::{
         Effort, GeminiFlashGeneration, ModelCatalog, ModelSlug, Operation, PreferredModel,
         VerificationMode,
@@ -64,6 +65,7 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
             .map(ModelCatalog::into_strings)
             .map(ResponseDocument::models),
         InvocationCommand::Content(request) => {
+            validate_network_targets(&request, deadline).await?;
             antigravity_version::require_supported(&agy_path, cwd.clone(), deadline).await?;
             let selected_models = match model {
                 Some(selected) => {
@@ -78,6 +80,34 @@ pub(crate) async fn execute(invocation: Invocation) -> Result<ResponseDocument, 
             content::execute(&agy_path, selected_models, effort, deadline, *request).await
         }
     }
+}
+
+async fn validate_network_targets(
+    request: &crate::request::ContentRequest,
+    deadline: Deadline,
+) -> Result<(), AgyError> {
+    let targets = match request {
+        crate::request::ContentRequest::Map(request) => std::slice::from_ref(&request.url),
+        crate::request::ContentRequest::Crawl(request) => std::slice::from_ref(&request.url),
+        crate::request::ContentRequest::Search(request) => request.source_restriction.exact_urls(),
+        crate::request::ContentRequest::Extract(request) => request.urls.as_slice(),
+        crate::request::ContentRequest::Research(request) => {
+            request.source_restriction.exact_urls()
+        }
+    };
+    for target in targets {
+        let safe =
+            SafeSourceUrl::parse_redirect(target.as_str()).map_err(|_| AgyError::InvalidCommand)?;
+        resolve(safe, deadline.instant())
+            .await
+            .map_err(|error| match error {
+                SourceNetworkError::Deadline => AgyError::Timeout,
+                SourceNetworkError::InvalidUrl
+                | SourceNetworkError::UnsafeAddress
+                | SourceNetworkError::Dns => AgyError::InvalidCommand,
+            })?;
+    }
+    Ok(())
 }
 
 async fn status(

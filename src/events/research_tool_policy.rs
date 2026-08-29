@@ -1,6 +1,6 @@
 //! Research-tool attempt policy validation.
 
-use crate::types::{Operation, ResearchToolPolicy};
+use crate::types::{Operation, ResearchToolBudget, ResearchToolPolicy};
 
 use super::{
     generated_content_policy::{self, ToolAttemptAssessment},
@@ -49,15 +49,14 @@ pub(super) fn assess_evidence_policy(
     };
     let tools = completed_research_tools(events);
     let evidence_is_sufficient = match policy {
-        ResearchToolPolicy::Budget(_) => {
-            has_required_evidence(operation, &tools) && attempt_count <= policy.maximum()
+        ResearchToolPolicy::Budget(budget) => {
+            budget_is_satisfied(operation, *budget, &tools, attempt_count, policy.maximum())
         }
         ResearchToolPolicy::Restricted {
-            budget: _,
+            budget,
             restriction,
         } => {
-            restricted_evidence_is_sufficient(operation, restriction, &tools, events)
-                && attempt_count <= policy.maximum()
+            budget_is_satisfied(operation, *budget, &tools, attempt_count, policy.maximum())
                 && source_policy::attempts_satisfy_restriction(events, restriction)
         }
         ResearchToolPolicy::ScopedTemporalSearch(required_query) => {
@@ -79,6 +78,26 @@ pub(super) fn assess_evidence_policy(
         EvidencePolicyAssessment::RecoverableUnlistedTool
     } else {
         EvidencePolicyAssessment::Satisfied
+    }
+}
+
+fn budget_is_satisfied(
+    operation: Operation,
+    budget: ResearchToolBudget,
+    tools: &[ToolName],
+    attempt_count: usize,
+    maximum: usize,
+) -> bool {
+    match budget {
+        ResearchToolBudget::PrefetchedEvidence => tools.is_empty() && attempt_count == 0,
+        ResearchToolBudget::SiteDiscovery
+        | ResearchToolBudget::StandardSearch
+        | ResearchToolBudget::TemporalSearch
+        | ResearchToolBudget::Research(_) => {
+            tools == [ToolName::SearchWeb]
+                && has_required_evidence(operation, tools)
+                && attempt_count <= maximum
+        }
     }
 }
 
@@ -136,71 +155,6 @@ fn failed_web_tool_attempts(events: &[Event]) -> Option<bool> {
     } else {
         Some(saw_failure)
     }
-}
-
-fn restricted_evidence_is_sufficient(
-    operation: Operation,
-    restriction: &crate::source_restriction::SourceRestriction,
-    tools: &[ToolName],
-    events: &[Event],
-) -> bool {
-    let direct_read_can_prove = matches!(operation, Operation::Search | Operation::Research)
-        && restriction.has_exact_urls();
-    has_required_evidence(operation, tools)
-        || (direct_read_can_prove && has_completed_paired_direct_read(events))
-}
-
-/// Finds one successful direct-read pair after the caller has validated every attempt.
-///
-/// `assess_evidence_policy` runs the tool-attempt assessment and
-/// `completed_research_attempt_count` before this helper, so later failed,
-/// unbalanced, or foreign attempts cannot be hidden by this first valid pair.
-fn has_completed_paired_direct_read(events: &[Event]) -> bool {
-    let Some(current) = events
-        .iter()
-        .find(|event| event.kind == EventName::Init)
-        .and_then(|event| event.conversation_id.as_ref())
-    else {
-        return false;
-    };
-    let mut active = Vec::new();
-
-    for event in events {
-        let Some(step) = event
-            .step_update
-            .as_ref()
-            .filter(|step| step.step_type == StepType::Tool)
-        else {
-            continue;
-        };
-        let Some(info) = step.tool_info.as_ref() else {
-            return false;
-        };
-        if info.name != ToolName::ReadUrlContent {
-            continue;
-        }
-        if step.conversation_id.as_ref() != Some(current) {
-            return false;
-        }
-        let identity = AttemptIdentity {
-            step_index: step.step_index,
-            tool: info.name,
-            parameters: info.parameters.as_ref(),
-        };
-        match step.state {
-            Some(StepState::Active) if info.error.is_none() => active.push(identity),
-            Some(StepState::Done) if info.error.is_none() => {
-                let Some(position) = active.iter().position(|attempt| *attempt == identity) else {
-                    return false;
-                };
-                active.remove(position);
-                return true;
-            }
-            Some(StepState::Active | StepState::Done | StepState::Error | StepState::Other)
-            | None => return false,
-        }
-    }
-    false
 }
 
 fn completed_research_attempt_count(events: &[Event]) -> Option<usize> {

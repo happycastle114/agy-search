@@ -106,6 +106,22 @@ fn temporal_search_allows_discovery_and_exact_date_followups_per_scope() {
 }
 
 #[test]
+fn map_and_crawl_allow_one_bounded_focused_site_search() {
+    for operation in ["map", "crawl"] {
+        let mut command = research_command();
+        command
+            .args([
+                operation,
+                "https://example.com/",
+                "--instructions",
+                "two-tools",
+            ])
+            .assert()
+            .success();
+    }
+}
+
+#[test]
 fn synthesis_research_allows_five_attempts_with_four_sources() {
     // Given two searches and three reads for a four-source synthesis request.
     let mut command = research_command();

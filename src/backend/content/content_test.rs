@@ -10,7 +10,37 @@ use std::{
 };
 
 use super::*;
-use crate::{error::AgyError, types::NonEmptyText};
+use crate::{
+    error::AgyError,
+    source_restriction::{SourceDomain, SourceRestriction},
+    types::{HttpUrl, NonEmptyText},
+};
+use std::str::FromStr as _;
+
+#[test]
+fn research_recovery_mode_distinguishes_exact_and_mixed_boundaries() {
+    let source = HttpUrl::parse("https://example.com/source").expect("valid source URL");
+    let exact = SourceRestriction::parse(Vec::new(), vec![source.clone()])
+        .expect("valid exact restriction");
+    let mixed = SourceRestriction::parse(
+        vec![SourceDomain::from_str("example.com").expect("valid source domain")],
+        vec![source],
+    )
+    .expect("valid mixed restriction");
+
+    assert_eq!(
+        research_recovery_mode(&exact),
+        ResearchRecoveryMode::ExactPrefetched
+    );
+    assert_eq!(
+        research_recovery_mode(&mixed),
+        ResearchRecoveryMode::SearchDiscovery
+    );
+    assert_eq!(
+        research_recovery_mode(&SourceRestriction::Unrestricted),
+        ResearchRecoveryMode::SearchDiscovery
+    );
+}
 
 #[derive(Debug, Default)]
 struct Gate {

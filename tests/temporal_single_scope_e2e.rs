@@ -52,7 +52,7 @@ fn single_scope_recovers_the_exact_source_tuple_without_a_scoped_rerun()
     assert_eq!(std::fs::read_to_string(agy_trace)?.lines().count(), 1);
     assert_eq!(
         source_trace_urls(&source_trace)?,
-        vec![SOURCE_URL.to_owned()]
+        vec![SOURCE_URL.to_owned(), SOURCE_URL.to_owned()]
     );
     Ok(())
 }
@@ -169,10 +169,10 @@ fn assert_single_scope_fails_closed(
         .code(6)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy output invalid\n"));
-    assert_eq!(std::fs::read_to_string(&agy_trace)?.lines().count(), 2);
+    assert_eq!(std::fs::read_to_string(&agy_trace)?.lines().count(), 1);
     assert_eq!(
         source_trace_urls(&source_trace)?,
-        vec![source_url.to_owned()]
+        vec![source_url.to_owned(), source_url.to_owned()]
     );
     Ok(())
 }

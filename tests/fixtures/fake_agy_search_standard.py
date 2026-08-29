@@ -23,7 +23,15 @@ def run_search(
     payload: dict[str, JsonValue], arguments: list[str], emit: Emitter
 ) -> int:
     query = str(payload["query"])
-    edge_result = run_standard_edge_scenario(query, emit)
+    restriction = payload.get("source_restriction")
+    exact_urls = restriction.get("urls", []) if isinstance(restriction, dict) else []
+    domains = restriction.get("domains", []) if isinstance(restriction, dict) else []
+    exact_only = bool(exact_urls) and not domains
+    edge_result = run_standard_edge_scenario(
+        query,
+        emit,
+        str(exact_urls[0]) if exact_only else None,
+    )
     if edge_result is not None:
         return edge_result
     if query == "fixture" and "source_restriction" in payload:
@@ -253,8 +261,18 @@ def run_search(
             },
             "results": results,
         },
-        "call_mcp_tool" if query == "mcp-only" else "search_web",
-        8 if query == "temporal-eight-tools" else 3 if query == "too-many-tools" else 1,
-        restricted_query(query, payload),
+        (
+            "call_mcp_tool"
+            if query == "mcp-only"
+            else "search_web"
+        ),
+        0
+        if exact_only
+        else 8
+        if query == "temporal-eight-tools"
+        else 3
+        if query == "too-many-tools"
+        else 1,
+        None if exact_only else restricted_query(query, payload),
     )
     return 0

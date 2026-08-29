@@ -6,11 +6,12 @@ use std::{
 };
 
 use crate::{
-    cli::{Cli, Command, QueryArgument},
+    cli::{Cli, Command, CrawlArgs, QueryArgument, SiteArgs},
     error::AgyError,
     request::{
         ContentRequest, CrawlRequest, ExtractRequest, MapRequest, ResearchRequest, SearchRequest,
     },
+    source_network::SafeSourceUrl,
     source_restriction::SourceRestriction,
     temporal_contract::TemporalContract,
     types::{
@@ -118,30 +119,8 @@ fn convert_command(
                 arguments.output.output,
             )
         }
-        Command::Map(arguments) => {
-            let request = MapRequest {
-                url: arguments.url,
-                limit: arguments.limit,
-                instructions: arguments.instructions,
-                allow_external: arguments.allow_external,
-            };
-            (
-                InvocationCommand::Content(Box::new(ContentRequest::Map(request))),
-                arguments.output.output,
-            )
-        }
-        Command::Crawl(arguments) => {
-            let request = CrawlRequest {
-                url: arguments.url,
-                limit: arguments.limit,
-                instructions: arguments.instructions,
-                allow_external: arguments.allow_external,
-            };
-            (
-                InvocationCommand::Content(Box::new(ContentRequest::Crawl(request))),
-                arguments.output.output,
-            )
-        }
+        Command::Map(arguments) => convert_map(arguments)?,
+        Command::Crawl(arguments) => convert_crawl(arguments)?,
         Command::Research(arguments) => {
             let source_urls = arguments.source_urls;
             let source_restriction =
@@ -156,6 +135,11 @@ fn convert_command(
                 temporal_source_urls,
                 arguments.cutoff,
             )?;
+            let tool_call_budget = if source_restriction.is_exact_only() {
+                ResearchAttemptBudget::none()
+            } else {
+                ResearchAttemptBudget::from_max_sources(arguments.max_sources)
+            };
             let request = ResearchRequest {
                 query: resolve_query(arguments.query)?,
                 source_policy: SourcePolicy::PrimaryFirst,
@@ -165,7 +149,7 @@ fn convert_command(
                 temporal_contract,
                 source_restriction,
                 max_sources: arguments.max_sources,
-                tool_call_budget: ResearchAttemptBudget::from_max_sources(arguments.max_sources),
+                tool_call_budget,
             };
             (
                 InvocationCommand::Content(Box::new(ContentRequest::Research(request))),
@@ -174,6 +158,34 @@ fn convert_command(
         }
     };
     Ok(converted)
+}
+
+fn convert_map(arguments: SiteArgs) -> Result<(InvocationCommand, Option<PathBuf>), AgyError> {
+    SafeSourceUrl::parse_redirect(arguments.url.as_str()).map_err(|_| AgyError::InvalidCommand)?;
+    let request = MapRequest {
+        url: arguments.url,
+        limit: arguments.limit,
+        instructions: arguments.instructions,
+        allow_external: arguments.allow_external,
+    };
+    Ok((
+        InvocationCommand::Content(Box::new(ContentRequest::Map(request))),
+        arguments.output.output,
+    ))
+}
+
+fn convert_crawl(arguments: CrawlArgs) -> Result<(InvocationCommand, Option<PathBuf>), AgyError> {
+    SafeSourceUrl::parse_redirect(arguments.url.as_str()).map_err(|_| AgyError::InvalidCommand)?;
+    let request = CrawlRequest {
+        url: arguments.url,
+        limit: arguments.limit,
+        instructions: arguments.instructions,
+        allow_external: arguments.allow_external,
+    };
+    Ok((
+        InvocationCommand::Content(Box::new(ContentRequest::Crawl(request))),
+        arguments.output.output,
+    ))
 }
 
 fn resolve_query(argument: QueryArgument) -> Result<NonEmptyText, AgyError> {

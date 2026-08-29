@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use tokio::time::Instant;
 
+use super::text::{canonical_evidence_text, find_ascii_case_insensitive};
 use super::{binding::bind_evidence, fetch::fetch_bodies};
 use crate::{
     error::AgyError,
@@ -50,6 +51,7 @@ impl SourceEvidenceSnapshot {
         research: &mut ResearchResponse,
     ) -> Result<(), AgyError> {
         let mut source_contexts = HashMap::new();
+        let mut source_values: HashMap<SafeSourceUrl, Vec<NonEmptyText>> = HashMap::new();
         for candidate in &mut research.evidence_audit.candidates {
             let source = SafeSourceUrl::parse_redirect(candidate.url.as_str())
                 .map_err(|_| AgyError::OutputInvalid)?;
@@ -58,6 +60,7 @@ impl SourceEvidenceSnapshot {
                 .as_ref()
                 .ok_or(AgyError::OutputInvalid)?;
             let value = candidate.value.as_ref().ok_or(AgyError::OutputInvalid)?;
+            let declared_value = value.clone();
             let body = self.bodies.get(&source).ok_or(AgyError::OutputInvalid)?;
             let bound = bind_evidence(body, excerpt.as_str(), value.as_str())
                 .ok_or(AgyError::OutputInvalid)?;
@@ -66,9 +69,18 @@ impl SourceEvidenceSnapshot {
             candidate.value =
                 Some(NonEmptyText::parse(&bound.value).map_err(|_| AgyError::OutputInvalid)?);
             candidate.evidence_excerpt = Some(context.clone());
-            source_contexts.entry(source).or_insert(context);
+            source_contexts.entry(source.clone()).or_insert(context);
+            source_values
+                .entry(source)
+                .or_default()
+                .push(declared_value);
         }
         for finding in &mut research.findings {
+            let declared_finding = canonical_evidence_text(&format!(
+                "{} {}",
+                finding.title.as_str(),
+                finding.summary.as_str()
+            ));
             let mut summary = String::new();
             let mut cited = HashSet::new();
             for citation in &finding.citations {
@@ -80,6 +92,12 @@ impl SourceEvidenceSnapshot {
                 let context = source_contexts
                     .get(&source)
                     .ok_or(AgyError::OutputInvalid)?;
+                let values = source_values.get(&source).ok_or(AgyError::OutputInvalid)?;
+                if !values.iter().any(|value| {
+                    find_ascii_case_insensitive(&declared_finding, value.as_str()).is_some()
+                }) {
+                    return Err(AgyError::OutputInvalid);
+                }
                 if !summary.is_empty() {
                     summary.push_str("\n\n");
                 }

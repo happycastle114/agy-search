@@ -235,10 +235,13 @@ every exact trusted page with `--source-url HTTPS_URL`; Search and Research use
 both flags as caller-owned allowlists. `--domain` is the canonical domain-tree
 allowlist and admits only its host and
 subdomains, while `--source-url` admits only that exact canonical URL. Standard
-Search treats it as metadata-only; exact-source Research prefetches and binds
-the page body. These flags prove membership only, never ownership: do
-not infer ownership from a name, URL, domain, or search result. Antigravity
-cannot guarantee that it never viewed a third-party snippet during search.
+Search with only exact URLs disables discovery and reads those pages directly;
+the core independently fetches and projects retained page bodies. Exact-source
+Research also prefetches and binds the page body. These flags prove membership
+only, never ownership: do not infer ownership from a name, URL, domain, or
+search result. Exact-only mode prevents third-party discovery; unrestricted or
+domain-scoped search cannot guarantee that it never viewed a third-party
+snippet.
 
 When a Research task already has the complete exact canonical page set, pass
 each page with `--source-url` in the first `research` call and skip discovery
@@ -308,11 +311,12 @@ fetched and verified and dominates a same-domain path otherwise admitted by
 2-8 scopes return the unique newest declared candidate. Research retains the
 required report shape but remains one-shot.
 
-With a cutoff, strongly structured caller-owned first rows may replace a wrong
-model value or date only all-or-nothing: every declared scope must have an exact
-fact at or before the cutoff. Otherwise the rows are discarded and Search uses
-the complete scoped fallback. Without a cutoff, current primary-value anchoring
-remains; do not promote a mismatched local row.
+For an exact-URL-only temporal Search, strongly structured caller-owned first
+rows select the unique latest fact for every declared scope without another
+model network call. With a cutoff, only rows at or before it are eligible. The
+local recovery remains all-or-nothing; ambiguous or incomplete rows fail closed.
+For mixed/domain discovery without a cutoff, primary-value anchoring remains
+before the complete scoped fallback.
 
 If a task otherwise routes to Verified and its exact scope inventory or
 canonical source URL is unknown, use the one standard search already declared
@@ -388,17 +392,18 @@ artifacts until the answer is complete so provenance can be checked.
   Standard Search output; never expose or reconstruct a discarded URL. Each
   redirect hop is independently parsed, DNS-validated, and pinned before it can
   be followed.
-- For research, require every cited URL to appear in `sources`. Standard
-  Research must complete both discovery and a canonical read of every retained
-  source page; a complete caller-supplied exact URL set may use direct reads
-  without discovery.
-- Interpret `date` only as an explicit publication/release date and
-  `last_updated` only as an explicit modification/update date. In Standard
+- For research, require every cited URL to appear in `sources`. Unrestricted or
+  domain-scoped Research uses `search_web` only for discovery, after which the
+  wrapper independently fetches and verifies every retained source page. A
+  complete caller-supplied exact URL set is prefetched by the wrapper and runs
+  AGY with no network tools.
+- Interpret `date` only as an explicit publication/release date. The current
+  public contract always projects `last_updated` to `null` because there is no
+  dedicated modification-date audit binding. In Standard
   Search and Standard Research, a syntactically valid `date` becomes `null`
   unless same-URL audit evidence binds its complete source date text. Never use
   an execution, crawl, fetch, query, or cutoff date instead. In `temporal-comparison`, the
-  verified audit binds publication dates only, so `last_updated` must be `null`;
-  any non-null update value fails closed with exit 6.
+  verified audit binds publication dates only, so `last_updated` remains `null`.
 - For multi-scope latest/current/as-of claims, require the exact declared scopes,
   canonical source pages, exact version or value, and explicit source dates.
   Temporal exit 0 proves source-body binding for that declared set, not that the

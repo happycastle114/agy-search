@@ -1,6 +1,6 @@
 //! Isolated Antigravity execution for one content request.
 
-use std::{path::Path, time::Duration};
+use std::time::Duration;
 
 use tempfile::Builder;
 use tokio::time;
@@ -15,30 +15,10 @@ use crate::{
     types::{Effort, ModelSlug, Operation, OutputFormat, ResearchToolPolicy},
 };
 
-use super::super::RecoveryModel;
+use super::{super::RecoveryModel, agent};
 
 const ISOLATION_DIRECTORY: &str = "agy-search";
 const ISOLATION_PREFIX: &str = "agy-search-";
-const AGENT_NAME: &str = "agy-search";
-const AGENT_DIRECTORY: &str = ".agents/agents/agy-search";
-const AGENT_DEFINITION: &str = r"---
-name: agy-search
-description: Isolated source-backed web search for one schema-constrained request.
-tools:
-  - search_web
-  - read_url_content
-  - view_file
-  - grep_search
-mainAgent: true
-subagent: false
-inheritMcp: false
-model: inherit
-commandExecutionPolicy: off
----
-
-Follow the caller's operation, source policy, tool budget, and output schema exactly. Use only the tools listed above.
-";
-
 #[derive(Clone)]
 pub(super) struct ExecutionContext {
     pub(super) executable: String,
@@ -146,7 +126,7 @@ async fn run_content(
         .prefix(ISOLATION_PREFIX)
         .tempdir_in(isolation_base)
         .map_err(|_| AgyError::InvalidCommand)?;
-    install_agent(isolated.path())?;
+    agent::install(isolated.path(), operation, &tool_policy)?;
     let output = run(ProcessRequest {
         argv: print_argv(context, remaining, schema, prompt),
         cwd: isolated.path().to_path_buf(),
@@ -214,7 +194,7 @@ fn print_argv(
         "--dangerously-skip-permissions".to_owned(),
         "--disable-slash-commands".to_owned(),
         "--agent".to_owned(),
-        AGENT_NAME.to_owned(),
+        agent::NAME.to_owned(),
         "--print-timeout".to_owned(),
         format!("{}s", remaining.as_secs_f64()),
         "--output-format".to_owned(),
@@ -230,11 +210,4 @@ fn print_argv(
     }
     argv.extend(["-p".to_owned(), prompt]);
     argv
-}
-
-fn install_agent(root: &Path) -> Result<(), AgyError> {
-    let directory = root.join(AGENT_DIRECTORY);
-    std::fs::create_dir_all(&directory).map_err(|_| AgyError::InvalidCommand)?;
-    std::fs::write(directory.join("agent.md"), AGENT_DEFINITION)
-        .map_err(|_| AgyError::InvalidCommand)
 }

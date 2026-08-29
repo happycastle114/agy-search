@@ -53,11 +53,12 @@ impl VerifiedSources {
         plan: &TemporalRecoveryPlan,
         audit: &EvidenceAudit,
         cutoff: Option<&crate::types::CalendarDate>,
+        select_latest: bool,
     ) -> Result<LocalFactRecovery, AgyError> {
         let mut facts = Vec::with_capacity(plan.scopes().len());
         for scope in plan.scopes() {
-            let fact_result = if cutoff.is_some() {
-                self.contract.unique_fact(scope.as_str())
+            let fact_result = if select_latest || cutoff.is_some() {
+                self.contract.latest_fact(scope.as_str(), cutoff)
             } else {
                 let mut matching = audit
                     .candidates
@@ -80,9 +81,6 @@ impl VerifiedSources {
             let Some(fact) = fact else {
                 return Ok(LocalFactRecovery::Unsupported);
             };
-            if cutoff.is_some_and(|cutoff| fact.date() > cutoff) {
-                return Ok(LocalFactRecovery::Unsupported);
-            }
             facts.push(fact);
         }
         Ok(LocalFactRecovery::Complete(facts))

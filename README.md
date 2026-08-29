@@ -9,7 +9,7 @@ Antigravity 1.1.8 added print-mode `json`, `stream-json`, and custom JSON Schema
 enforcement. This release requires 1.1.20, where headless print error handling
 is reliable, and is tested with 1.1.22. `agy-search` uses the structured
 contract, disables slash expansion so input stays data, runs inside an isolated
-read-only custom agent, and validates event evidence and results again before
+least-privilege custom agent, and validates event evidence and results again before
 anything reaches stdout.
 
 ## Install
@@ -156,24 +156,25 @@ reasoning effort for latency; pass `--effort medium` or `--effort high` only
 when the task needs deeper synthesis. For Search and Research, `--domain` is a
 caller-owned domain-tree allowlist (the named host plus its subdomains), while
 `--source-url` is a canonical exact-URL allowlist. In standard Search, either
-flag restricts returned/audited membership and exact URLs remain metadata-only.
-Standard Search still performs a terminal HTTPS
-reachability check. A bare site origin is rejected as evidence unless the caller
-listed that exact origin with `--source-url`. Standard Research must complete a
-canonical source-page read for every retained source in addition to discovery;
-its citations must equal retained source URLs. The wrapper then fetches each
-terminal page independently, requires every audit exact value to occur on that
-same page, and replaces the model excerpt and public source snippet with bounded
-context sliced from the fetched body. When Research receives a complete exact
-URL set, the wrapper prefetches those pages once, supplies bounded relevant body
-windows to both the primary and fail-closed recovery, and verifies the result
-against the same immutable body snapshot. Use `--verification
+flag restricts returned/audited membership. An exact-URL-only request disables
+every AGY network tool. The wrapper first validates public DNS, fetches each
+supplied URL with its pinned transport, and gives AGY only bounded untrusted
+evidence for synthesis. A bare site origin is rejected as evidence unless the
+caller listed that exact origin with `--source-url`. Unrestricted and
+domain-scoped Search and Research expose only `search_web`; after discovery the
+wrapper independently resolves and fetches each retained terminal publisher
+page, requires every audit exact value to occur on that same page, and publishes
+locally projected body context. Research remains all-or-nothing and its
+citations must equal retained source URLs. Exact-source Research reuses one
+immutable prefetched snapshot for primary synthesis, fail-closed recovery, and
+final verification. Use `--verification
 temporal-comparison` as temporal source
 verification across 1-8 exact caller-owned `--scope` values and 1-8 canonical
 HTTPS `--source-url` values. One scope verifies that exact latest tuple and
 requires `--as-of`; 2-8 scopes additionally select the unique newest member of
 the declared set. Ordinary searches keep the faster `standard` default and
-perform no source-body fetch.
+verify only the retained result pages rather than the caller-declared temporal
+set.
 Search and research accept `--as-of YYYY-MM-DD` only in temporal mode. It is an
 inclusive cutoff for explicit source publication/release dates, not a crawl,
 query, or execution date; standard mode rejects it. Never use a future cutoff.
@@ -190,13 +191,17 @@ research remains one-shot and fails closed instead of retrying.
 | `status` | Prove supported version and authenticated model discovery | Shared invocation deadline |
 | `models` | Return current model slugs for diagnostics | Non-empty, unique slugs; no version guard |
 | `search` | Discover live sources | 1-20 results, repeatable `--domain`/`--source-url` |
-| `extract` | Read exact pages | 1-20 HTTP(S) URLs |
+| `extract` | Read exact pages | 1-20 HTTPS URLs |
 | `map` | Discover website URLs | 1-100, same-origin by default |
 | `crawl` | Read website pages | 1-50, same-origin by default |
 | `research` | Synthesize cited findings | 1-20 sources, repeatable `--domain`/`--source-url` |
 
-`map` and `crawl` accept `--allow-external` only when cross-origin results are
-intentional. They are bounded agent operations, not exhaustive-site promises.
+`map` and `crawl` accept only a public HTTPS starting URL. The wrapper resolves
+that target and rejects local, private, reserved, and non-public addresses
+before AGY starts; their generated agent exposes search only, with no direct URL
+reader or filesystem tools. `--allow-external` is accepted only when
+cross-origin results are intentional. They are bounded discovery operations,
+not exhaustive-site promises.
 
 ## Agent skill and OpenCode
 
@@ -218,7 +223,7 @@ The 0.2.4 distribution binaries measure 1,072,064 B on Apple Silicon and
 `agy --version` averaged 41.0 ms over 10 runs and a deterministic fake search
 including the required version guard averaged 47.1 ms over 10 runs. The guard
 is one local process before content, not a cache; its cost remains small next to
-real model/web-tool execution. Linux x86-64 CI guards a 1.40 MiB binary-size
+real model/web-tool execution. Linux x86-64 CI guards a 1.60 MiB binary-size
 budget. See [docs/performance.md](docs/performance.md) for the historical
 comparison and size attribution.
 
@@ -239,7 +244,7 @@ boundaries.
 ## Output and failure contract
 
 Each content response has an `object` discriminator: `search`, `extract`, `map`,
-`crawl`, or `research`. Sources must be unique HTTP(S) URLs. Research citations
+`crawl`, or `research`. Sources must be unique HTTPS URLs. Research citations
 must reference sources in the same response.
 
 | Exit | Meaning |
@@ -274,12 +279,13 @@ identifiers, or tool payloads.
   one unique newest declared winner. Research may expose several supporting
   sources, but every candidate must remain bound to a declared source and the
   unique latest candidate must remain publicly visible.
-- Fetches temporal source bodies with HTTPS-only URLs, no URL credentials,
+- Fetches source bodies with HTTPS-only URLs, no URL credentials,
   public-address DNS validation and pinning, no redirects or ambient proxy,
   config, or cookies, bounded UTF-8 bodies, and the invocation's shared
-  deadline. Standard mode never uses this fetch path.
-- Preserves exact search constraints and uses the second bounded tool call only
-  to locate or read the canonical evidence page when verification needs it.
+  deadline.
+- Preserves exact search constraints. Exact-source operations expose no AGY
+  network tool; unrestricted and domain-scoped operations permit only bounded
+  `search_web` discovery.
 - Validates every Standard Search result and audit URL through shell-free fixed
   curl arguments: HTTPS-only protocols, five redirects, bounded
   connect/request time, and one DNS-pinned terminal target. Validation starts
@@ -291,18 +297,20 @@ identifiers, or tool payloads.
   discard that whole run and use up to two bounded recovery attempts. Each
   redirect hop is parsed, public-address validated,
   and pinned before the next request.
-- Counts every attempted built-in `search_web` or `read_url_content` lifecycle
-  toward the budget and requires all started calls to complete successfully.
+- Counts every attempted built-in `search_web` lifecycle toward the budget and
+  requires all started calls to complete successfully. Any URL-read or
+  otherwise unlisted tool attempt fails closed.
 - Rejects generic MCP calls and merely started tools as provenance.
-- Runs content work in an exact `tempfile`-owned directory with a generated
-  custom agent whose only tools are `search_web`, `read_url_content`,
-  `view_file`, and `grep_search`; command execution, subagents, MCP inheritance,
-  and slash commands are disabled.
+- Runs content work in an exact `tempfile`-owned directory with a generated,
+  least-privilege custom agent. Unrestricted/domain Search and Research, Map,
+  and Crawl expose only `search_web`; exact-URL-only Search/Research and Extract
+  use `tools: []`. Filesystem access, URL reads, command execution, subagents,
+  MCP inheritance, and slash commands are disabled.
 - Passes headless `--dangerously-skip-permissions` only inside that isolated,
-  explicitly tool-scoped custom agent so required web reads cannot become soft
-  permission denials. Event validation still rejects every unlisted tool
-  attempt and requires every retained Research URL to match a completed read
-  call. It never changes global Antigravity permissions or automates login.
+  explicitly tool-scoped custom agent. Event validation rejects every unlisted
+  tool attempt; independently fetched publisher bodies, not model-controlled
+  reads, are the publication authority. It never changes global Antigravity
+  permissions or automates login.
 - Treats fetched pages as untrusted data in the research prompt.
 - Re-fetches Standard Research sources with DNS-pinned redirect handling,
   requires each exact audit value in the same-URL visible body, and publishes a
@@ -322,26 +330,27 @@ body structure; use temporal mode with explicit `--scope`, `--source-url`, and
 only relative to the caller-declared scopes and sources. It cannot prove that an
 unknown global inventory is complete or guarantee source truthfulness;
 independently verify high-stakes claims. `--domain` and `--source-url` prove
-caller-specified membership, never official, first-party, or project ownership;
-Antigravity also cannot guarantee that no third-party snippet was ever viewed
-during its search process. A hard official/first-party/project-maintained request
+caller-specified membership, never official, first-party, or project ownership.
+Exact-URL-only requests mechanically disable discovery; unrestricted or
+domain-scoped discovery cannot guarantee that no third-party snippet was ever
+viewed during search. A hard official/first-party/project-maintained request
 MUST pass explicitly trusted domains or exact URLs and keep the ownership
 constraint in the query. If that exact trust set is unavailable, stop and report
 that mechanical enforcement is impossible, or do only user-permitted discovery
 and label its candidates unverified.
 
 `date` means an explicitly exposed publication or release date.
-`last_updated` means a separately exposed modification or update date. Missing
-publication/release dates stay `null`. Standard Search and Standard Research
+`last_updated` is reserved for a separately verified modification or update
+date. Missing publication/release dates stay `null`. Standard Search and Standard Research
 downgrade an exact date to `null` when returned same-URL evidence does not bind
 its complete source date text; they preserve the source instead of exposing
-unsupported metadata. Malformed dates still fail. The
+unsupported metadata, and currently publish `last_updated: null` because the
+audit has no dedicated update-date binding. Malformed dates still fail. The
 CLI never substitutes execution, crawl, fetch, query, or cutoff time, infers a
 date, or copies one meaning into the other. Temporal comparison instead requires
 strict ISO dates for every ordered candidate and rejects missing or null dates
 with exit 6. Its current source audit does not bind modification dates, so
-temporal public results must use `last_updated: null`; any non-null value also
-fails closed with exit 6.
+all public results use `last_updated: null`.
 
 ## Development
 
@@ -354,6 +363,9 @@ cargo build --profile dist --locked
 
 Real authenticated tests are ignored by default so CI cannot spend Antigravity
 usage. Run the complete discovery plus five-operation gate explicitly:
+
+The official AGY contracts and the pulled OpenCodex grounding comparison behind
+these choices are recorded in [`docs/grounding-study.md`](docs/grounding-study.md).
 
 ```bash
 AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \

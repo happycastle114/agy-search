@@ -113,8 +113,8 @@ def temporal_document(
     }
 
 
-def findings(source_url: str) -> list[JsonValue]:
-    return [{"title": "Finding", "summary": "Detail", "citations": [source_url]}]
+def findings(source_url: str, evidence: str = "Detail") -> list[JsonValue]:
+    return [{"title": "Finding", "summary": evidence, "citations": [source_url]}]
 
 
 def source(text: str, url: str, date: str) -> dict[str, JsonValue]:

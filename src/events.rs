@@ -103,11 +103,6 @@ pub(crate) fn parse_structured_run(
             return Err(AgyError::OutputInvalid.into());
         }
     }
-    if operation == Operation::Research
-        && !source_policy::research_sources_were_read(&events, &response)
-    {
-        return Err(AgyError::OutputInvalid.into());
-    }
     Ok(ParsedRun {
         response,
         grounding: source_policy::grounding_requirement(&events, policy),
@@ -115,6 +110,8 @@ pub(crate) fn parse_structured_run(
     })
 }
 
+#[cfg(test)]
+mod event_stream_test;
 #[cfg(test)]
 mod event_test;
 #[cfg(test)]

@@ -6,6 +6,7 @@ use thiserror::Error;
 use tokio::time::Instant;
 
 use crate::{
+    calendar_date::CalendarDate,
     source_document::{CandidateBinding, SourceDocument, SourceDocumentError},
     source_fact::SourceFact,
     source_fetch::{SafeSourceUrl, SourceFetchError, SourceFetcher},
@@ -102,5 +103,38 @@ impl SourceContract {
             }
         }
         Ok(found)
+    }
+
+    pub(crate) fn latest_fact(
+        &self,
+        scope: &str,
+        cutoff: Option<&CalendarDate>,
+    ) -> Result<Option<SourceFact>, SourceContractError> {
+        let mut latest: Option<SourceFact> = None;
+        let mut latest_is_tied = false;
+        for document in self.documents.values() {
+            let Some(fact) = document.exact_fact(scope)? else {
+                continue;
+            };
+            if cutoff.is_some_and(|cutoff| fact.date() > cutoff) {
+                continue;
+            }
+            match latest.as_ref().map(SourceFact::date) {
+                None => {
+                    latest = Some(fact);
+                    latest_is_tied = false;
+                }
+                Some(date) if fact.date() > date => {
+                    latest = Some(fact);
+                    latest_is_tied = false;
+                }
+                Some(date) if fact.date() == date => latest_is_tied = true,
+                Some(_) => {}
+            }
+        }
+        if latest_is_tied {
+            return Err(SourceDocumentError::AmbiguousBinding.into());
+        }
+        Ok(latest)
     }
 }

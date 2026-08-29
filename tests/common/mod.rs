@@ -75,8 +75,8 @@ pub(crate) fn recovery_search(command: Command, query: &str) -> Command {
             scopes: ["alpha", "beta"],
             sources: &[
                 "https://example.com/primary",
-                "https://example.com/alpha",
-                "https://example.com/beta",
+                "https://example.com/recovery-alpha",
+                "https://example.com/recovery-beta",
             ],
             query,
         },

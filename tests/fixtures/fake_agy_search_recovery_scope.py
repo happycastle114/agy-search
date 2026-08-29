@@ -7,7 +7,8 @@ def emit_recovered_scope(
     query: str, scope: str, payload: dict[str, JsonValue], emit: Emitter
 ) -> int:
     is_alpha = scope == "alpha"
-    source_url = f"https://example.com/{scope}"
+    recovery_path = f"recovery-{scope}" if query.startswith("temporal-recoverable") else scope
+    source_url = f"https://example.com/{recovery_path}"
     value = "alpha-v2" if is_alpha else "beta-v1"
     date = "2026-08-05" if is_alpha else "2026-08-04"
     if query == "temporal-fallback-after-cutoff" and is_alpha:
@@ -39,6 +40,17 @@ def emit_recovered_scope(
             f"{required_search_query} {value} July 29, 2026 "
             "https://example.com/release"
         )
+    restriction = payload.get("source_restriction")
+    exact_urls = restriction.get("urls", []) if isinstance(restriction, dict) else []
+    domains = restriction.get("domains", []) if isinstance(restriction, dict) else []
+    exact_only = bool(exact_urls) and not domains
+    deliberately_invalid_search = query in {
+        "temporal-recoverable-bare-query",
+        "temporal-recoverable-first-followup-query",
+        "temporal-recoverable-poisoned-followup",
+        "temporal-recoverable-three-searches",
+    }
+    direct_read = exact_only and not deliberately_invalid_search
     emit(
         {
             "object": "search",
@@ -71,13 +83,15 @@ def emit_recovered_scope(
         3
         if query == "temporal-recoverable-three-searches"
         else 2
-        if followup_query is not None
+        if followup_query is not None and not direct_read
+        else 0
+        if direct_read
         else 1,
-        query=scoped_query,
+        query=None if direct_read else scoped_query,
         additional_tool=(
             "read_url_content" if query == "temporal-recoverable-read-url" else None
         ),
-        followup_query=followup_query,
+        followup_query=None if direct_read else followup_query,
     )
     return 0
 

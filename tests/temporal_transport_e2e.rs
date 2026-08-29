@@ -2,9 +2,7 @@
 
 mod common;
 
-use common::{
-    TemporalSearchFixture, source_trace_urls, temporal_search, trace_scopes, traced_command,
-};
+use common::{TemporalSearchFixture, source_trace_urls, temporal_search, traced_command};
 use predicates::prelude::*;
 use tempfile::TempDir;
 
@@ -50,7 +48,10 @@ fn temporal_comparison_maps_source_fetch_deadline_to_public_timeout_exit()
         .code(4)
         .stdout(predicate::str::is_empty())
         .stderr(predicate::eq("error: agy timed out\n"));
-    assert_eq!(trace_scopes(&agy_trace)?, vec![None]);
+    assert!(
+        !agy_trace.exists(),
+        "exact-source transport must fail before Antigravity starts"
+    );
     assert_eq!(source_trace_urls(&source_trace)?.len(), 2);
     Ok(())
 }
@@ -84,7 +85,10 @@ fn temporal_comparison_maps_failed_or_invalid_source_transport_to_exit_six()
             .code(6)
             .stdout(predicate::str::is_empty())
             .stderr(predicate::eq("error: agy output invalid\n"));
-        assert_eq!(trace_scopes(&agy_trace)?, vec![None]);
+        assert!(
+            !agy_trace.exists(),
+            "exact-source transport must fail before Antigravity starts"
+        );
         assert_eq!(source_trace_urls(&source_trace)?.len(), 2);
     }
     Ok(())

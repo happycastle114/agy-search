@@ -112,8 +112,8 @@ fn policy_spellings_and_maxima_remain_closed() {
         Ok(Effort::High)
     );
 
-    assert_eq!(ResearchToolBudget::Single.maximum(), 1);
-    assert_eq!(ResearchToolBudget::DirectReads(4).maximum(), 4);
+    assert_eq!(ResearchToolBudget::SiteDiscovery.maximum(), 2);
+    assert_eq!(ResearchToolBudget::PrefetchedEvidence.maximum(), 0);
     assert_eq!(ResearchToolBudget::StandardSearch.maximum(), 2);
     assert_eq!(ResearchToolBudget::TemporalSearch.maximum(), 8);
     assert_eq!(

@@ -32,6 +32,10 @@ def emit_single_scope(
     value = "1.1.11" if after_cutoff else "2.5.0"
     date = "2026-08-04" if after_cutoff else "2026-08-03"
     source_date_text = "August 4, 2026" if after_cutoff else "August 3, 2026"
+    restriction = payload.get("source_restriction")
+    exact_urls = restriction.get("urls", []) if isinstance(restriction, dict) else []
+    domains = restriction.get("domains", []) if isinstance(restriction, dict) else []
+    exact_only = bool(exact_urls) and not domains
     emit(
         {
             "object": "search",
@@ -61,7 +65,7 @@ def emit_single_scope(
             ],
         },
         "search_web",
-        1,
-        payload.get("required_search_query"),
+        0 if exact_only else 1,
+        None if exact_only else payload.get("required_search_query"),
     )
     return 0

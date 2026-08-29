@@ -134,11 +134,13 @@ into a global-winner comparison.
 
 For Search and Research, `--domain` is the canonical caller-owned domain-tree
 allowlist: it permits exactly that host and its subdomains. `--source-url` is a
-canonical exact-URL allowlist. In standard Search it restricts returned and
-internal-audit URL membership; it does not trigger a source-body fetch.
+canonical exact-URL allowlist. In standard Search an exact-URL-only request
+disables every AGY network tool; the wrapper independently fetches the supplied
+pages and provides bounded evidence for local body projection.
 A bare origin is rejected unless it is an exact caller-supplied source URL.
-Standard Research must complete a canonical page read for every retained URL
-after discovery, and every finding citation must equal one retained source URL.
+Standard Research uses `search_web` only for discovery, then the wrapper must
+independently fetch every retained URL; every finding citation must equal one
+retained source URL.
 A complete exact URL set is also independently prefetched, supplied as bounded
 query-relevant source windows, and reused for same-snapshot body binding.
 In temporal comparison, every declared exact HTTPS `--source-url` is fetched
@@ -167,13 +169,13 @@ snippet was ever viewed during search.
   `findings[{title,summary,citations[]}]`,
   `sources[{title,url,snippet,date,last_updated}]`
 
-For source metadata, `date` is an explicit publication/release date and
-`last_updated` is an explicit modification/update date. In Standard Search and
-Standard Research, a valid `date` that cannot bind to same-URL audit evidence
-becomes `null`, and a malformed date is rejected. Never infer a date from
-`last_updated`, execution, crawl, fetch, query, or cutoff time. Temporal
-comparison verifies publication dates strictly, requires `last_updated: null`,
-and rejects a non-null update value with exit 6.
+For source metadata, `date` is an explicit publication/release date. In
+Standard Search and Standard Research, a valid `date` that cannot bind to
+same-URL audit evidence becomes `null`, and a malformed date is rejected. The
+current contract always publishes `last_updated: null` because it has no
+dedicated modification-date audit binding. Never infer a date from execution,
+crawl, fetch, query, or cutoff time. Temporal comparison verifies publication
+dates strictly and also requires `last_updated: null`.
 
 Search and research schemas also require an internal evidence audit with at
 least one candidate and one candidate per requested scope. The wrapper validates
@@ -186,10 +188,11 @@ no redirects, a bounded body, UTF-8 validation, and the shared deadline. Every
 candidate's scope, exact compared value, source date text, and normalized date
 must bind in one deterministic source section. Temporal search
 returns exactly one public unique-latest winner and may perform one bounded,
-all-or-nothing recovery across the caller-owned scopes. With a cutoff, strong
-caller-owned first-row facts can replace a wrong model value/date only if every
-declared scope has a fact at or before it; otherwise the full scoped fallback
-runs. Without a cutoff, primary-value anchoring remains. Temporal research keeps
+all-or-nothing recovery across the caller-owned scopes. Exact-URL-only Search
+selects unique latest strongly structured first-row facts locally for every
+scope; with a cutoff, only rows at or before it are eligible. Ambiguous or
+incomplete exact rows fail closed without a model network call. Mixed/domain
+discovery retains primary-value anchoring before scoped fallback. Temporal research keeps
 its multiple public sources, requires every candidate's value and exact
 source-date text in a same-URL source, requires each structured source date to
 be ISO and audit-backed, and requires the unique latest candidate to remain
@@ -228,7 +231,7 @@ provenance proof. It installs no second updater executable. Source and
 package-manager installations update through their original channel. Never run
 an update implicitly during research.
 
-The CLI rejects empty content responses, non-HTTP(S) URLs, duplicate URLs,
+The CLI rejects empty content responses, non-HTTPS URLs, duplicate URLs,
 out-of-bound result counts, unsupported research citations, missing terminal
 events, and runs without the appropriate live web tool evidence.
 

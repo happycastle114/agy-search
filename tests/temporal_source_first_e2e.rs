@@ -44,7 +44,7 @@ fn temporal_comparison_recovers_both_scopes_locally_without_scoped_model_calls()
     assert_eq!(trace_scopes(&agy_trace)?, vec![None]);
     assert_eq!(
         source_trace_urls(&source_trace)?,
-        vec!["https://example.com/local"]
+        vec!["https://example.com/local", "https://example.com/local"]
     );
     Ok(())
 }
@@ -131,7 +131,7 @@ fn temporal_as_of_falls_back_as_one_wave_when_any_local_fact_is_after_cutoff()
             query: "temporal-source-after-cutoff-fallback",
         },
     )
-    .args(["--as-of", "2026-08-05"])
+    .args(["--as-of", "2026-08-05", "--domain", "example.com"])
     .assert()
     .success();
     let response: Value = serde_json::from_slice(&assertion.get_output().stdout)?;
@@ -164,7 +164,7 @@ fn temporal_as_of_rejects_an_after_cutoff_scoped_fallback_without_partial_output
             query: "temporal-fallback-after-cutoff",
         },
     )
-    .args(["--as-of", "2026-08-05"])
+    .args(["--as-of", "2026-08-05", "--domain", "example.com"])
     .assert()
     .code(6)
     .stdout(predicate::str::is_empty())
@@ -222,6 +222,7 @@ fn temporal_comparison_uses_the_existing_full_scoped_wave_when_local_rows_have_n
             query: "temporal-local-unextractable",
         },
     )
+    .args(["--domain", "example.com"])
     .env("AGY_SEARCH_SOURCE_FETCH_TRACE", &source_trace)
     .assert()
     .success();
@@ -235,7 +236,10 @@ fn temporal_comparison_uses_the_existing_full_scoped_wave_when_local_rows_have_n
     assert_recovery_trace(&trace_scopes(&agy_trace)?);
     let mut fetched = source_trace_urls(&source_trace)?;
     fetched.sort();
-    let mut expected = sources.map(str::to_owned).into_iter().collect::<Vec<_>>();
+    let mut expected = sources
+        .into_iter()
+        .flat_map(|source| [source.to_owned(), source.to_owned()])
+        .collect::<Vec<_>>();
     expected.sort();
     assert_eq!(fetched, expected);
     Ok(())

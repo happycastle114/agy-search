@@ -13,7 +13,7 @@ use crate::{
     response_models::EvidenceAudit,
     source_restriction::SourceRestriction,
     source_verification::{LocalFactRecovery, VerifiedSources},
-    types::{Operation, ResearchToolPolicy},
+    types::{Operation, ResearchToolBudget, ResearchToolPolicy},
     verification::{
         ScopeLabel, TemporalRecoveryPlan, merge_verified_scopes, validate_scope_result,
         verified_scope_from_source_fact,
@@ -33,9 +33,12 @@ pub(super) async fn recover_temporal(
         .temporal_contract
         .as_ref()
         .ok_or(AgyError::OutputInvalid)?;
-    if let LocalFactRecovery::Complete(facts) =
-        sources.recover_local_facts(&plan, &primary_audit, contract.cutoff())?
-    {
+    if let LocalFactRecovery::Complete(facts) = sources.recover_local_facts(
+        &plan,
+        &primary_audit,
+        contract.cutoff(),
+        request.source_restriction.is_exact_only(),
+    )? {
         let verified = plan
             .scopes()
             .iter()
@@ -44,6 +47,9 @@ pub(super) async fn recover_temporal(
             .map(|(scope, fact)| verified_scope_from_source_fact(scope, fact, contract))
             .collect::<Result<Vec<_>, _>>()?;
         return merge_verified_scopes(request, &plan, &verified);
+    }
+    if request.source_restriction.is_exact_only() {
+        return Err(AgyError::OutputInvalid);
     }
     let schema = temporal_scope_schema(&request.source_restriction)?;
     let original = request.clone();
@@ -64,6 +70,14 @@ pub(super) async fn recover_temporal(
                             ResearchToolPolicy::ScopedTemporalSearch(
                                 request.required_search_query.clone(),
                             )
+                        }
+                        restriction @ SourceRestriction::Allowlist { .. }
+                            if restriction.domains().is_empty() =>
+                        {
+                            ResearchToolPolicy::Restricted {
+                                budget: ResearchToolBudget::PrefetchedEvidence,
+                                restriction: Box::new(restriction.clone()),
+                            }
                         }
                         restriction @ SourceRestriction::Allowlist { .. } => {
                             ResearchToolPolicy::RestrictedScopedTemporalSearch {

@@ -46,6 +46,8 @@ class SourcePath(str, Enum):
     DIRECT_MARKET_SOURCE = "/direct-market-source"
     ALPHA = "/alpha"
     BETA = "/beta"
+    RECOVERY_ALPHA = "/recovery-alpha"
+    RECOVERY_BETA = "/recovery-beta"
     CATALOG_POLICY_1 = "/catalog-policy-1"
     CATALOG_POLICY_2 = "/catalog-policy-2"
     CANONICAL = "/canonical"
@@ -230,6 +232,10 @@ def source_body(path: SourcePath) -> str | None:
             return panels(
                 ("beta", "beta", "beta-v1 2026-08-04 beta-v2 2026-08-03"),
             )
+        case SourcePath.RECOVERY_ALPHA:
+            return pinned_panels(("alpha", "alpha", "alpha-v2", "2026-08-05"))
+        case SourcePath.RECOVERY_BETA:
+            return pinned_panels(("beta", "beta", "beta-v1", "2026-08-04"))
         case SourcePath.CATALOG_POLICY_1:
             return fixture_evidence_body("Catalog policy verified primary evidence")
         case SourcePath.CATALOG_POLICY_2:

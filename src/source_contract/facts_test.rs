@@ -75,6 +75,51 @@ fn local_fact_lookup_falls_back_for_weak_or_contaminated_rows_and_rejects_duplic
     Ok(())
 }
 
+#[test]
+fn latest_fact_selects_the_unique_newest_row_subject_to_cutoff()
+-> Result<(), Box<dyn std::error::Error>> {
+    fn document(
+        path: &str,
+        value: &str,
+        date: &str,
+    ) -> Result<SourceDocument, Box<dyn std::error::Error>> {
+        let url = SafeSourceUrl::parse(&format!("https://example.com/{path}"))?;
+        let body = format!(
+            "<button data-tab=\"track\">Track</button>\
+             <div data-list-panel=\"track\"><div data-section-row>\
+             <span data-date-pin>{value} {date}</span></div></div>"
+        );
+        Ok(SourceDocument::from_text(url, &body)?)
+    }
+
+    let contract = SourceContract::from_documents(vec![
+        document("old", "v1", "August 3, 2026")?,
+        document("new", "v2", "August 5, 2026")?,
+    ])?;
+    let cutoff = CalendarDate::parse("2026-08-04")?;
+
+    assert_eq!(
+        contract
+            .latest_fact("Track", None)?
+            .ok_or("latest fact missing")?
+            .value(),
+        "v2"
+    );
+    assert_eq!(
+        contract
+            .latest_fact("Track", Some(&cutoff))?
+            .ok_or("cutoff fact missing")?
+            .value(),
+        "v1"
+    );
+    let tied = SourceContract::from_documents(vec![
+        document("tie-a", "v2", "August 5, 2026")?,
+        document("tie-b", "v3", "August 5, 2026")?,
+    ])?;
+    assert!(tied.latest_fact("Track", None).is_err());
+    Ok(())
+}
+
 #[tokio::test]
 #[ignore = "live official source proof"]
 async fn live_official_panel_verifies_current_cli_tuple() -> Result<(), Box<dyn std::error::Error>>

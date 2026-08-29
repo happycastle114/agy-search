@@ -165,14 +165,17 @@ impl ContentRequest {
     }
 
     pub(crate) const fn tool_budget(&self) -> ResearchToolBudget {
+        if matches!(self, Self::Extract(_)) || self.source_restriction().is_exact_only() {
+            return ResearchToolBudget::PrefetchedEvidence;
+        }
         match self {
             Self::Search(request) => match request.verification {
                 VerificationMode::Standard => ResearchToolBudget::StandardSearch,
                 VerificationMode::TemporalComparison => ResearchToolBudget::TemporalSearch,
             },
             Self::Research(request) => ResearchToolBudget::Research(request.tool_call_budget),
-            Self::Extract(request) => ResearchToolBudget::DirectReads(request.urls.len()),
-            Self::Map(_) | Self::Crawl(_) => ResearchToolBudget::Single,
+            Self::Extract(_) => ResearchToolBudget::PrefetchedEvidence,
+            Self::Map(_) | Self::Crawl(_) => ResearchToolBudget::SiteDiscovery,
         }
     }
 
@@ -208,7 +211,7 @@ mod tests {
     use crate::types::ResearchAttemptBudget;
 
     #[test]
-    fn extract_tool_budget_matches_requested_url_count() {
+    fn exact_sources_use_wrapper_prefetched_evidence() {
         let request = ContentRequest::Extract(ExtractRequest {
             urls: vec![
                 HttpUrl::parse("https://example.com/one").expect("test URL must be valid"),
@@ -217,7 +220,10 @@ mod tests {
             query: None,
         });
 
-        assert_eq!(request.tool_budget(), ResearchToolBudget::DirectReads(2));
+        assert_eq!(
+            request.tool_budget(),
+            ResearchToolBudget::PrefetchedEvidence
+        );
     }
 
     #[test]

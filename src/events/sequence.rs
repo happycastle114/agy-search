@@ -68,13 +68,10 @@ pub(super) fn completed_research_tools(events: &[Event]) -> Vec<ToolName> {
 
 pub(super) fn has_required_evidence(operation: Operation, tools: &[ToolName]) -> bool {
     match operation {
-        Operation::Search => tools.contains(&ToolName::SearchWeb),
-        Operation::Research => {
-            tools.contains(&ToolName::SearchWeb) && tools.contains(&ToolName::ReadUrlContent)
+        Operation::Search | Operation::Map | Operation::Crawl => {
+            tools.contains(&ToolName::SearchWeb)
         }
-        Operation::Extract | Operation::Crawl => tools.contains(&ToolName::ReadUrlContent),
-        Operation::Map => {
-            tools.contains(&ToolName::SearchWeb) || tools.contains(&ToolName::ReadUrlContent)
-        }
+        Operation::Research => tools.contains(&ToolName::SearchWeb),
+        Operation::Extract => false,
     }
 }

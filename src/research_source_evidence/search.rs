@@ -8,6 +8,7 @@ use tokio::time::Instant;
 use super::{
     MINIMUM_FALLBACK_VALUE_CHARACTERS,
     binding::{bind_search_candidate_evidence, nearest_date_binding},
+    research::SourceEvidenceSnapshot,
     text::{canonical_evidence_text, forward_evidence_context},
     title::project_search_source,
 };
@@ -15,7 +16,7 @@ use crate::{
     error::AgyError,
     redirect::curl_executable,
     response_models::{ScopeEvidence, SearchResponse},
-    source_fetch::{SafeSourceUrl, SourceFetcher},
+    source_fetch::{SafeSourceUrl, SourceFetchError, SourceFetcher},
     source_verification::map_source_fetch_error,
     types::NonEmptyText,
 };
@@ -39,6 +40,24 @@ struct VerifiedSearchCandidate {
 }
 
 impl SearchSourceEvidence {
+    pub(crate) fn from_prefetched(evidence: &SourceEvidenceSnapshot) -> Self {
+        let pages = evidence
+            .bodies
+            .iter()
+            .map(|(url, body)| {
+                (
+                    url.clone(),
+                    SearchEvidencePage {
+                        body: body.clone(),
+                        headings: Vec::new(),
+                        title: None,
+                    },
+                )
+            })
+            .collect();
+        Self { pages }
+    }
+
     pub(crate) async fn fetch(
         search: &SearchResponse,
         deadline: Instant,
@@ -53,11 +72,16 @@ impl SearchSourceEvidence {
             .collect::<Result<Vec<_>, _>>()?;
         let executable = PathBuf::from(curl_executable()?);
         let fetched = SourceFetcher::new(executable)
-            .fetch_many(&sources, deadline)
+            .fetch_many_available(&sources, deadline)
             .await
             .map_err(|error| map_source_fetch_error(&error))?;
         let mut pages = HashMap::with_capacity(fetched.len());
         for source in fetched {
+            let source = match source {
+                Ok(source) => source,
+                Err(SourceFetchError::Deadline) => return Err(AgyError::Timeout),
+                Err(_) => continue,
+            };
             let (url, raw_body) = source.into_parts();
             let body = canonical_evidence_text(&raw_body);
             let mut headings = crate::source_document_heading::heading_sections(&raw_body)
@@ -94,7 +118,7 @@ impl SearchSourceEvidence {
                 return Err(AgyError::OutputInvalid);
             }
         }
-        if pages.len() != sources.len() {
+        if pages.is_empty() {
             return Err(AgyError::OutputInvalid);
         }
         Ok(Self { pages })

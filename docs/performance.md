@@ -10,7 +10,7 @@ state.
 
 | Surface | Budget |
 |---|---:|
-| Distribution binary on Linux x86-64 CI | < 1.40 MiB |
+| Distribution binary on Linux x86-64 CI | < 1.60 MiB |
 | Local latency | No portable CI gate; report the measured guarded path below |
 | Captured stdout or stderr per Antigravity process | <= 16 MiB |
 
@@ -24,6 +24,8 @@ changing process, parsing, schema, or output paths.
 |---|---:|
 | macOS ARM64 0.2.4 distribution binary | 1,072,064 B |
 | Linux x86-64 0.2.4 CI distribution binary | 1,395,344 B |
+| macOS ARM64 0.3.0 final candidate | 1,205,360 B |
+| Linux x86-64 0.3.0 CI candidate | 1,582,224 B |
 | Historical pre-floor wrapper-only startup measurement | 2.0 ms mean |
 | Real `agy --version`, 10 runs | 41.0 ms mean, 38.9-44.2 ms range |
 | Fake content including `agy --version` guard, 10 runs | 47.1 ms mean, 46.1-50.1 ms range |
@@ -44,8 +46,10 @@ the 148.1 KiB `.text` increase primarily to `agy_search` (+93.4 KiB), Tokio
 remained the smallest safe measured configuration. Relative to its 1,072,064 B
 baseline, `opt-level=s` added 195,280 B, thin LTO added 567,712 B, 16 codegen
 units added 33,552 B, retaining symbols added 906,744 B, and unwind panics added
-199,200 B. The 1.40 MiB Linux gate therefore leaves 72,663 B (5.21%) above the
-observed 0.2.4 artifact while continuing to fail meaningful future growth.
+199,200 B. Version 0.3.0 adds 186,880 B (13.39%) on Linux for Gemini 3.7 model
+negotiation, same-body Search/Research/Extract projection, and the reusable
+production gates. The 1.60 MiB Linux gate leaves 95,498 B (6.04%) above the
+observed candidate while continuing to fail meaningful future growth.
 
 Every content command and `status` pays one uncached local `agy --version`
 preflight before model discovery or `-p`; this measurement is the full process
@@ -153,34 +157,67 @@ or source body missing the requested markers.
 
 ### Current-affairs and research release gates
 
-On 2026-08-29, the final 0.3.0 candidate passed the opt-in current-affairs gate
-against three independently established official-source oracles. Each result
-had to match a known exact evidence URL (query-parameter order ignored), expose
-only source-backed date metadata, and contain the listed same-page facts.
+On 2026-08-29, the final 0.3.0 candidate passed three consecutive runs of the
+opt-in current-affairs gate against three independently established
+official-source oracles: nine of nine searches passed. Each result had to match
+a known exact evidence URL (query-parameter order ignored), expose only
+source-backed date metadata, and contain the listed same-page facts.
 
-| Oracle | AGY Search wall time | Exact official source outcome |
-|---|---:|---|
-| Bank of Korea policy rate | 17.36 s | 3.00 and prior 2.75 on the official rate history or 2026-08-27 decision page |
-| Latest stable Rust release | 15.60 s | Rust 1.98.0, published 2026-08-20 |
-| Latest WHO item as of 2026-08-29 | 45.71 s | 2026-08-28 Ebola Bundibugyo IHR Emergency Committee meeting report |
+| Oracle | Three AGY Search runs | Median | Exact official source outcome |
+|---|---:|---:|---|
+| Bank of Korea policy rate | 18.32 / 17.51 / 28.08 s | 18.32 s | 3.00 and prior 2.75 on the official 2026-08-27 decision page |
+| Latest stable Rust release | 19.18 / 74.96 / 16.13 s | 19.18 s | Rust 1.98.0, published 2026-08-20 |
+| Latest WHO item as of 2026-08-29 | 18.77 / 20.18 / 16.08 s | 18.77 s | 2026-08-28 Ebola Bundibugyo IHR Emergency Committee meeting report |
+
+The median across all nine AGY samples was 18.77 seconds; the slowest was a
+74.96-second successful Rust recovery. Exact terminal-page hit rate, factual
+oracle pass rate, and reachable-link rate were each 9/9. No bare origin,
+search-result URL, unsupported date, or dead public link passed.
+
+The same three queries were issued once as one batch through the independent
+browser search tool used during development. It returned in 2.1 seconds and
+contained the correct dated facts for all three queries. It selected the exact
+deep Bank of Korea and Rust pages, but selected WHO's current Ebola situation
+listing rather than the requested terminal meeting-report page: exact
+terminal-page hit rate 2/3, factual marker coverage 3/3. This is a single
+interactive comparison, not a benchmark of that external service. It confirms
+the tradeoff visible in this candidate: ordinary browser search is much faster,
+while AGY Search adds bounded model work plus independent terminal-page fetch,
+DNS/link validation, and same-URL evidence projection. The release claim is
+therefore production-grade verified search, not latency parity with a hosted
+search index.
 
 The final body-projected candidate passed the separate production Research gate
-in 172.07 seconds: known IANA extraction took 21.96 seconds, four-source Gemini
-3.7 research took 43.36 seconds, and independent re-extraction of all four
-retained sources took 106.75 seconds total. These are finite live observations, not an
+in 169.76 seconds: known IANA extraction took 27.95 seconds, four-source Gemini
+3.7 research took 43.34 seconds, and independent re-extraction of all four
+retained sources took 98.46 seconds total. The local verifier also requires each
+finding to repeat an exact value that was independently bound to the body of the
+same cited URL; a correct claim attached to a different official page fails closed.
+These are finite live observations, not an
 availability or latency SLO. The direct official links found through the
 external comparison search and through AGY were equivalent at the oracle level;
 the external comparison search was generally faster at discovery, while AGY's
 release gate added local body binding and fail-closed publication checks.
+
+The authenticated AGY 1.1.22 compatibility gate also passed all five public
+operations on the final candidate: Search 19.65 seconds, Extract 17.75 seconds,
+Map 16.12 seconds, Crawl 17.07 seconds, and Research 17.93 seconds (94.58 seconds
+total). Search and Research used one exact IANA source for deterministic
+operation compatibility; the independent current-affairs and four-source
+production gates above retain the open-web and multi-source quality burden.
 
 Multi-URL Extract is split into at most four concurrent isolated single-URL AGY
 runs and merged in caller order. Each result's public content is projected from
 its independently fetched exact page rather than model prose. This avoids one
 long conversation broadening its local-tool behavior after several page reads,
 while retaining all-or-nothing output and the original shared deadline.
-Standard Search similarly discards a
-run containing a balanced failed web-tool attempt and spends a configured
-recovery tier; the mixed-error result itself is never published.
+Standard Search verifies retained pages independently, publishes only candidates
+whose own HTML bodies remain readable and support the declared value, and fails
+when no page survives. A deadline still aborts the whole request. This prevents
+one unreadable PDF or sibling page from discarding an otherwise proven HTML
+result. It also discards a run containing a balanced failed web-tool attempt and
+spends a configured recovery tier; the mixed-error result itself is never
+published.
 
 The 0.2.9 correction keeps the low fast path and diversifies bounded recovery
 through the discovered medium and high tiers. Its exact `한국 오늘 증시` serial

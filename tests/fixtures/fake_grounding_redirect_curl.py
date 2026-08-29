@@ -35,6 +35,9 @@ host = urlparse(url).hostname
 if host is None or not resolve.startswith(f"{host}:443:"):
     raise SystemExit(64)
 if source_fetch:
+    if mode == "source-partial" and host == "iana.org":
+        sys.stdout.buffer.write(b"\xff\xfe\nAGY_SOURCE_META:200:0\n")
+        raise SystemExit(0)
     sys.stdout.write(
         "<p>Direct source 0 contains Direct evidence 0 from verified body. "
         "Direct source 1 contains Direct evidence 1 from verified body. "
@@ -103,7 +106,7 @@ elif mode in {"two-origins", "two-origins-one-dead", "retry-projection"}:
     else:
         location = None
         status = 200
-elif mode == "direct-validation":
+elif mode in {"direct-validation", "source-partial"}:
     path = urlparse(url).path
     if path == "/redirecting":
         location, status = "https://iana.org/terminal", 302

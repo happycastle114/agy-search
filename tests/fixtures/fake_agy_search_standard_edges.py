@@ -16,17 +16,22 @@ class DirectSourceCase(str, Enum):
     SITE_ROOT_FIRST = "standard-site-root-first"
     LANDING_PAGE_FIRST = "standard-landing-page-first"
     MIXED = "standard-direct-mixed"
+    SOURCE_PARTIAL = "standard-source-partial"
     REDIRECT = "standard-direct-redirect"
 
 
-def run_standard_edge_scenario(query: str, emit: Emitter) -> int | None:
+def run_standard_edge_scenario(
+    query: str, emit: Emitter, exact_url: str | None
+) -> int | None:
     """Emit a focused standard-search edge case when the query names one."""
     try:
         direct_source_case = DirectSourceCase(query)
     except ValueError:
         direct_source_case = None
     if direct_source_case is not None:
-        _emit_direct_source_result(direct_source_case, emit, _invocation_count())
+        _emit_direct_source_result(
+            direct_source_case, emit, _invocation_count(), exact_url
+        )
         return 0
     match query:
         case "standard-date-korean":
@@ -283,13 +288,18 @@ def _emit_non_source_retry_result(query: str, emit: Emitter, invocation: int) ->
 
 
 def _emit_direct_source_result(
-    scenario: DirectSourceCase, emit: Emitter, invocation: int
+    scenario: DirectSourceCase,
+    emit: Emitter,
+    invocation: int,
+    exact_url: str | None,
 ) -> None:
     if scenario is DirectSourceCase.MIXED:
         urls = ["https://example.com/reachable", "https://iana.org/dead-direct"]
+    elif scenario is DirectSourceCase.SOURCE_PARTIAL:
+        urls = ["https://example.com/readable", "https://iana.org/unreadable"]
     elif scenario is DirectSourceCase.REDIRECT:
         urls = ["https://example.com/redirecting"]
-    elif invocation > 1:
+    elif invocation > 1 and exact_url is None:
         urls = ["https://example.com/direct-safe"]
     else:
         unsafe_urls = {
@@ -339,6 +349,6 @@ def _emit_direct_source_result(
             "results": results,
         },
         "search_web",
-        1,
-        scenario.value,
+        0 if exact_url is not None else 1,
+        None if exact_url is not None else scenario.value,
     )

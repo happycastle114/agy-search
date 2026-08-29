@@ -101,7 +101,7 @@ pub(crate) struct SearchArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct ExtractArgs {
-    /// One or more explicit HTTP(S) URLs.
+    /// One or more explicit HTTPS URLs.
     #[arg(required = true, num_args = 1..=20)]
     pub(crate) urls: Vec<HttpUrl>,
     #[arg(long)]

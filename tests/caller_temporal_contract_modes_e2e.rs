@@ -29,18 +29,6 @@ fn temporal_contract_rejects_invalid_source_sets_before_agy() -> TestResult {
             "--scope",
             "beta",
             "--source-url",
-            "http://example.com/releases",
-            "q",
-        ][..],
-        &[
-            "--verification",
-            "temporal-comparison",
-            "research",
-            "--scope",
-            "alpha",
-            "--scope",
-            "beta",
-            "--source-url",
             "https://example.com/releases#one",
             "--source-url",
             "https://example.com/releases#two",
@@ -49,6 +37,27 @@ fn temporal_contract_rejects_invalid_source_sets_before_agy() -> TestResult {
     ] {
         assert_semantic_invalid(arguments)?;
     }
+
+    let temporary = TempDir::new()?;
+    let trace = temporary.path().join("http-source.jsonl");
+    command(&trace)
+        .args([
+            "--verification",
+            "temporal-comparison",
+            "research",
+            "--scope",
+            "alpha",
+            "--scope",
+            "beta",
+            "--source-url",
+            "http://example.com/releases",
+            "q",
+        ])
+        .assert()
+        .code(2)
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("URL must use HTTPS"));
+    assert!(!trace.exists());
 
     let temporary = TempDir::new()?;
     let trace = temporary.path().join("too-many-sources.jsonl");

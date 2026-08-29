@@ -191,8 +191,57 @@ fn rejects_http_urls_without_an_explicit_authority() {
             .assert()
             .code(2)
             .stdout(predicate::str::is_empty())
-            .stderr(predicate::str::contains("URL must use HTTP(S)"));
+            .stderr(predicate::str::contains("URL must use HTTPS"));
     }
+}
+
+#[test]
+fn site_operations_reject_local_and_private_targets_before_agy() {
+    for operation in ["map", "crawl"] {
+        for url in [
+            "http://127.0.0.1:8080/internal",
+            "https://127.0.0.1/internal",
+            "https://localhost/internal",
+            "https://10.0.0.1/internal",
+        ] {
+            command()
+                .args([operation, url])
+                .assert()
+                .code(2)
+                .stdout(predicate::str::is_empty());
+        }
+    }
+}
+
+#[test]
+fn exact_source_operations_reject_private_targets_before_agy()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temporary = TempDir::new()?;
+    let trace = temporary.path().join("agy-private-target.jsonl");
+    for arguments in [
+        vec!["extract", "https://127.0.0.1/internal"],
+        vec![
+            "search",
+            "private source",
+            "--source-url",
+            "https://127.0.0.1/internal",
+        ],
+        vec![
+            "research",
+            "private source",
+            "--source-url",
+            "https://127.0.0.1/internal",
+        ],
+    ] {
+        command()
+            .env("AGY_SEARCH_FIXTURE_TRACE", &trace)
+            .args(arguments)
+            .assert()
+            .code(2)
+            .stdout(predicate::str::is_empty());
+        assert!(!trace.exists());
+    }
+    Ok(())
 }
 
 #[test]

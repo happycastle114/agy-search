@@ -120,6 +120,10 @@ def emit_recovery_primary(
             "source_date_text": "2026-08-03",
             "evidence_excerpt": "released 2026-08-03",
         }
+    restriction = payload.get("source_restriction")
+    exact_urls = restriction.get("urls", []) if isinstance(restriction, dict) else []
+    domains = restriction.get("domains", []) if isinstance(restriction, dict) else []
+    exact_only = bool(exact_urls) and not domains
     emit(
         {
             "object": "search",
@@ -145,7 +149,7 @@ def emit_recovery_primary(
             ],
         },
         "search_web",
-        1,
-        restricted_query(query, payload),
+        0 if exact_only else 1,
+        None if exact_only else restricted_query(query, payload),
     )
     return 0

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from enum import Enum
+import os
 from typing import assert_never
 
 from fake_agy_research_temporal import (
@@ -25,7 +26,6 @@ class DatePolicy(str, Enum):
 
 
 class ReadOnlyResearchQuery(str, Enum):
-    EXACT_URL = "source-research-exact-read-only"
     DOMAIN_ONLY = "source-research-domain-read-only"
 
 
@@ -48,6 +48,27 @@ def run_research(
             or standard_date_response(raw_query)
             or ordinary_response(query)
         )
+    raw_query = str(payload["query"])
+    if raw_query == "source-research-mixed-retry":
+        trace_path = os.environ.get("AGY_SEARCH_FIXTURE_TRACE")
+        if trace_path is None:
+            return 29
+        with open(trace_path, encoding="utf-8") as trace:
+            invocation_count = sum(1 for line in trace if line.strip())
+        if invocation_count == 1:
+            audit = response["evidence_audit"]
+            assert isinstance(audit, dict)
+            candidates = audit["candidates"]
+            assert isinstance(candidates, list)
+            candidate = candidates[0]
+            assert isinstance(candidate, dict)
+            candidate["value"] = "Unbound primary claim"
+            candidate["evidence_excerpt"] = "Unbound primary claim"
+            findings = response["findings"]
+            assert isinstance(findings, list)
+            finding = findings[0]
+            assert isinstance(finding, dict)
+            finding["summary"] = "Unbound primary claim"
     tool_counts = {
         "research-five-tools": (2, 3),
         "research-seven-tools": (2, 5),
@@ -57,13 +78,17 @@ def run_research(
         "research-twelve-tools": (2, 10),
         "research-thirteen-tools": (2, 11),
     }
-    raw_query = str(payload["query"])
     read_only_url = direct_read_url(raw_query)
     response_urls = source_urls(response)
-    search_count, read_count = tool_counts.get(raw_query, (1, len(response_urls)))
+    search_count, read_count = tool_counts.get(raw_query, (1, 0))
+    exact_urls = exact_only_urls(payload)
     if read_only_url is not None:
         search_count, read_count = (0, 1)
-    read_urls = [response_urls[index % len(response_urls)] for index in range(read_count)]
+    elif exact_urls:
+        search_count, read_count = (0, 0)
+    else:
+        search_count += read_count
+        read_count = 0
     emit(
         response,
         "search_web",
@@ -72,9 +97,19 @@ def run_research(
         additional_tool="read_url_content" if read_count else None,
         additional_tool_count=read_count,
         scenario_override=raw_query,
-        additional_tool_url=read_only_url or read_urls,
+        additional_tool_url=read_only_url,
     )
     return 0
+
+
+def exact_only_urls(payload: dict[str, JsonValue]) -> list[str]:
+    restriction = payload.get("source_restriction")
+    if not isinstance(restriction, dict) or restriction.get("domains"):
+        return []
+    urls = restriction.get("urls")
+    if not isinstance(urls, list):
+        return []
+    return [url for url in urls if isinstance(url, str)]
 
 
 def source_urls(response: dict[str, JsonValue]) -> list[str]:
@@ -95,7 +130,7 @@ def direct_read_url(raw_query: str) -> str | None:
     except ValueError:
         return None
     match query:
-        case ReadOnlyResearchQuery.EXACT_URL | ReadOnlyResearchQuery.DOMAIN_ONLY:
+        case ReadOnlyResearchQuery.DOMAIN_ONLY:
             return "https://doc.rust-lang.org/book/"
         case _:
             assert_never(query)
@@ -147,7 +182,11 @@ def restricted_response(raw_query: str) -> dict[str, JsonValue] | None:
         },
         "title": "Research",
         "summary": "Synthesis",
-        "findings": [{"title": "Finding", "summary": "Detail", "citations": citations}],
+        "findings": [{
+            "title": "Finding",
+            "summary": "Allowed Third party" if len(citations) > 1 else "Allowed",
+            "citations": citations,
+        }],
         "sources": sources,
     }
 
@@ -213,7 +252,7 @@ def ordinary_response(query: ResearchQuery | None) -> dict[str, JsonValue]:
         },
         "title": "Research",
         "summary": "Synthesis",
-        "findings": [] if query is ResearchQuery.EMPTY_FINDINGS else findings(source_url),
+        "findings": [] if query is ResearchQuery.EMPTY_FINDINGS else findings(source_url, "Evidence"),
         "sources": [source],
     }
 
@@ -272,6 +311,6 @@ def standard_date_response(raw_query: str) -> dict[str, JsonValue] | None:
         },
         "title": "Research",
         "summary": "Synthesis",
-        "findings": findings(source_url),
+        "findings": findings(source_url, "Evidence"),
         "sources": [public_source],
     }
