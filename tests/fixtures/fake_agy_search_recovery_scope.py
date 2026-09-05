@@ -1,5 +1,9 @@
 """Per-scope temporal recovery scenarios."""
 
+import os
+from pathlib import Path
+from time import monotonic, sleep
+
 from fake_agy_search_types import Emitter, JsonValue
 
 
@@ -21,6 +25,15 @@ def emit_recovered_scope(
         date = "2026-08-03"
     excerpt = f"{value} released {date}"
     if query == "temporal-recoverable-one-invalid" and not is_alpha:
+        # Both recovery children must start before beta triggers fail-fast
+        # cancellation, otherwise the invocation-count assertion races startup.
+        trace_path = os.environ.get("AGY_SEARCH_FIXTURE_TRACE")
+        if trace_path is not None:
+            deadline = monotonic() + 5
+            while len(Path(trace_path).read_text().splitlines()) < 3:
+                if monotonic() >= deadline:
+                    return 30
+                sleep(0.01)
         excerpt = f"released {date}"
     required_search_query = payload_required_search_query(query, scope, payload)
     if payload.get("required_search_query") != required_search_query:
