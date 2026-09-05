@@ -11,7 +11,7 @@ escalate only when the evidence is insufficient.
 ## Preflight
 
 Run only the cheap local checks once before the first research command in the
-current agent session. Require agy-search 0.3.0 or newer. On the normal
+current agent session. Require agy-search 0.3.1 or newer. On the normal
 un-pinned search path, do not invoke `agy-search models` or pass `--model`:
 
 ```bash
@@ -35,8 +35,8 @@ Do not silently switch providers. After installation, repeat the cheap
 preflight. Run `agy-search status` only to diagnose availability or verify an
 install/update, not before each search. Run `agy-search models` once before
 explicitly pinning a model; ordinary searches omit both `models` and `--model`.
-CLI 0.3.0 internally performs a bounded advisory catalog lookup and prefers
-exact `gemini-3.7-flash-low` when present without creating a caller model pin;
+CLI 0.3.1 internally performs a bounded advisory catalog lookup and prefers
+exact `gemini-3.8-flash-low` when present without creating a caller model pin;
 never invent or cache a model slug. If the selected returned slug ends in
 `-low`, `-medium`, or `-high`, pass the matching `--effort` value. A mismatched
 suffix is invalid.
@@ -150,11 +150,12 @@ Then check that the query preserves the material gap or conflict.
 Commit to this bounded call plan before the first content call and do not add a
 discovery phase:
 
-- Quick: exactly one `search`. Stop there only for a link-only request. Before
-  asserting a fact, run one `extract` on the selected returned canonical URL;
-  a search snippet alone is not final evidence.
-- Verified: one standard `search`, followed by one `extract` over the selected
-  returned canonical pages. Make at most one additional
+- Quick: exactly one `search`. Inspect its returned source-body context. When
+  that context explicitly proves every requested fact, answer with the returned
+  canonical URL. Otherwise run one `extract` on that URL for the missing fields.
+- Verified: one standard `search`. Use one `extract` over the selected returned
+  canonical pages only when the projected body context lacks a requested fact
+  or its explicit date. Make at most one additional
   `temporal-comparison` search only when the first result supplies the exact
   scope and canonical source URL needed for source-body verification. Never
   repeat the standard search or use `research`.
@@ -173,9 +174,9 @@ Quick and Verified both start at low effort and use `-n 3`. Their difference is
 the evidence contract and timeout, not extra model thinking. Source-body verification,
 exact scopes, and canonical URLs provide temporal accuracy. Reserve medium for
 Synthesis and high for Deep unless the user explicitly overrides effort.
-Ordinary work omits both `agy-search models` and `--model`; CLI 0.3.0 performs
+Ordinary work omits both `agy-search models` and `--model`; CLI 0.3.1 performs
 its bounded advisory catalog lookup internally and prefers exact
-`gemini-3.7-flash-low` when present. Only an explicit model pin needs fresh
+`gemini-3.8-flash-low` when present. Only an explicit model pin needs fresh
 discovery and its suffix-matched effort.
 
 Routing is deliberately lowest-sufficient-depth: default to Quick for one
@@ -332,7 +333,8 @@ unverified; do not issue an extra temporal call, guess labels, or turn the
 model's hidden audit into caller-owned truth.
 
 Stay Quick only when one returned canonical page can prove the whole answer;
-read that page before stating the fact. Latest/current/as-of questions are at least Verified. If they span
+read its projected body context or extract the missing fields before stating
+the fact. Latest/current/as-of questions are at least Verified. If they span
 multiple independent products, jurisdictions, or time periods whose facts live
 on different sources, use Synthesis. In either case, list the complete scope,
 compare explicit source dates, and do not treat the first tab or result as
@@ -385,6 +387,12 @@ artifacts until the answer is complete so provenance can be checked.
 - Require exit code 0 and the response `object` matching the command.
 - Cite only returned URLs that directly support a claim. Standard Search
   exposes only terminal public HTTPS URLs.
+- CLI 0.3.0 and newer independently fetch Standard Search pages and project
+  `snippet` from their bodies. This bounded context can prove a fact without a
+  second model invocation when it contains every requested field. It does not
+  establish facts outside that context or global freshness/completeness. Use
+  `extract` for missing context and temporal verification for its declared
+  date/scope contract; never fill gaps from model knowledge.
 - Reject a bare site origin unless the caller explicitly supplied that exact
   origin as `--source-url`. Prefer the deepest canonical page containing the
   cited claim.
@@ -414,8 +422,9 @@ artifacts until the answer is complete so provenance can be checked.
 
 This is the end-to-end accuracy gate: do not report a factual answer until the
 chosen command exits 0, its matching public JSON response has been checked, and
-each material claim is tied to text read from a returned canonical URL under
-the selected trust boundary. Never turn an unverified search snippet into fact.
+each material claim is tied to independently fetched body context from a
+returned canonical URL under the selected trust boundary. Never turn an
+unverified provider search snippet into fact.
 The allowlist proves caller-specified membership only, never ownership.
 
 Read [references/commands.md](references/commands.md) for flags, response shapes,

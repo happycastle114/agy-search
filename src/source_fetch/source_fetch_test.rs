@@ -14,6 +14,106 @@ use crate::{
     source_document::{CandidateBinding, SourceDocument},
 };
 
+#[tokio::test]
+async fn starts_queued_fetch_before_slow_first_fetch_finishes()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::{
+        future::poll_fn,
+        sync::{Arc, Mutex},
+        task::{Poll, Waker},
+    };
+
+    enum Gate {
+        Waiting(Option<Waker>),
+        Open,
+    }
+
+    // Given: the first request can only finish after a queued request starts.
+    let gate = Arc::new(Mutex::new(Gate::Waiting(None)));
+    let count = super::MAX_FETCH_CONCURRENCY + 1;
+    let requests = (0..count).map(|index| {
+        let gate = Arc::clone(&gate);
+        async move {
+            if index == 0 {
+                poll_fn(|context| {
+                    let mut state = gate
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    match &mut *state {
+                        Gate::Waiting(waker) => {
+                            *waker = Some(context.waker().clone());
+                            Poll::Pending
+                        }
+                        Gate::Open => Poll::Ready(()),
+                    }
+                })
+                .await;
+            } else if index == super::MAX_FETCH_CONCURRENCY {
+                let previous = std::mem::replace(
+                    &mut *gate
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    Gate::Open,
+                );
+                match previous {
+                    Gate::Waiting(Some(waker)) => waker.wake(),
+                    Gate::Waiting(None) | Gate::Open => {}
+                }
+            }
+            index
+        }
+    });
+
+    // When: bounded retrieval runs, with a timeout only to detect deadlock.
+    let fetched =
+        tokio::time::timeout(Duration::from_secs(1), super::collect_bounded(requests)).await??;
+
+    // Then: the queued request releases the first, with input order preserved.
+    assert_eq!(fetched, (0..count).collect::<Vec<_>>());
+    Ok(())
+}
+
+#[tokio::test]
+async fn bounds_active_fetches_and_preserves_error_positions()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    // Given: more requests than slots, including one failed source.
+    let active = Arc::new(AtomicUsize::new(0));
+    let count = super::MAX_FETCH_CONCURRENCY * 2;
+    let requests = (0..count).map(|index| {
+        let active = Arc::clone(&active);
+        async move {
+            let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+            assert!(running <= super::MAX_FETCH_CONCURRENCY);
+            tokio::task::yield_now().await;
+            active.fetch_sub(1, Ordering::SeqCst);
+            match index {
+                0 => Err(super::SourceFetchError::EmptyBody),
+                other => Ok(other),
+            }
+        }
+    });
+
+    // When: each completed request allows another to begin.
+    let fetched = super::collect_bounded(requests).await?;
+
+    // Then: errors retain their input position and every other request completes.
+    assert_eq!(active.load(Ordering::SeqCst), 0);
+    assert_eq!(fetched.len(), count);
+    assert!(matches!(
+        fetched.first(),
+        Some(Err(super::SourceFetchError::EmptyBody))
+    ));
+    for (index, result) in fetched.into_iter().enumerate().skip(1) {
+        assert_eq!(result?, index);
+    }
+    Ok(())
+}
+
 fn fake_curl() -> Result<(tempfile::TempDir, PathBuf), Box<dyn std::error::Error>> {
     let temporary = tempfile::tempdir()?;
     let executable = temporary.path().join("curl");

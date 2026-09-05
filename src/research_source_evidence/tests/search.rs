@@ -1,5 +1,55 @@
 use super::*;
 use crate::response_models::SearchResponse;
+
+#[test]
+fn search_preserves_distinct_verified_contexts_for_the_same_url() {
+    // Given: two disjoint source facts, a repeated candidate, and an unsupported claim.
+    let first = "Rust 1.98.0 is the latest stable release available today.";
+    let second = "The compiler supports the portable widget target on all platforms.";
+    let mut search = search_fixture("Announcing Rust 1.98.0");
+    let original = search
+        .evidence_audit
+        .candidates
+        .first()
+        .expect("candidate")
+        .clone();
+    let mut additional = original.clone();
+    additional.value = Some(NonEmptyText::parse("portable widget target").expect("valid value"));
+    additional.evidence_excerpt = Some(NonEmptyText::parse(second).expect("valid excerpt"));
+    let mut invalid = original.clone();
+    invalid.value = Some(NonEmptyText::parse("invented unsupported feature").expect("valid value"));
+    invalid.evidence_excerpt = Some(
+        NonEmptyText::parse("This release includes an invented unsupported feature.")
+            .expect("valid excerpt"),
+    );
+    search
+        .evidence_audit
+        .candidates
+        .extend([original, additional, invalid]);
+    let evidence = SearchSourceEvidence {
+        pages: HashMap::from([(
+            SafeSourceUrl::parse_redirect("https://example.com/releases/1.98.0").expect("safe URL"),
+            SearchEvidencePage {
+                body: format!("{first} Unrelated intervening sentence. {second}"),
+                headings: Vec::new(),
+                title: Some("Announcing Rust 1.98.0".to_owned()),
+            },
+        )]),
+    };
+
+    // When: candidates are independently verified and projected into the public result.
+    evidence
+        .verify_and_project(&mut search)
+        .expect("verified result");
+
+    // Then: source order survives, repeated context appears once, and model prose is absent.
+    assert_eq!(
+        search.results.first().expect("result").snippet.as_str(),
+        format!("{first}\n{second}")
+    );
+    assert_eq!(search.evidence_audit.candidates.len(), 3);
+}
+
 fn search_fixture(title: &str) -> SearchResponse {
     serde_json::from_value(serde_json::json!({
         "object": "search",

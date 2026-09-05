@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    MINIMUM_PAGE_HEADING_CHARACTERS, MINIMUM_VALUE_CHARACTERS,
+    MAXIMUM_PROJECTED_CONTEXT_CHARACTERS, MINIMUM_PAGE_HEADING_CHARACTERS,
+    MINIMUM_VALUE_CHARACTERS,
     search::SearchEvidencePage,
     text::{canonical_evidence_text, find_ascii_case_insensitive},
 };
@@ -14,7 +15,7 @@ use crate::{
 pub(super) fn project_search_source(
     mut source: WebSource,
     pages: &HashMap<SafeSourceUrl, SearchEvidencePage>,
-    contexts: &HashMap<SafeSourceUrl, NonEmptyText>,
+    contexts: &HashMap<SafeSourceUrl, Vec<NonEmptyText>>,
     identities: &HashMap<crate::types::HttpUrl, NonEmptyText>,
     candidates: &[ScopeEvidence],
 ) -> Option<WebSource> {
@@ -55,7 +56,18 @@ pub(super) fn project_search_source(
             source.title = identity;
         }
     }
-    source.snippet = contexts.get(&safe)?.clone();
+    let (first, remaining) = contexts.get(&safe)?.split_first()?;
+    let mut snippet = first.as_str().to_owned();
+    let mut characters = snippet.chars().count();
+    for context in remaining {
+        let combined_characters = characters + 1 + context.as_str().chars().count();
+        if combined_characters <= MAXIMUM_PROJECTED_CONTEXT_CHARACTERS {
+            snippet.push('\n');
+            snippet.push_str(context.as_str());
+            characters = combined_characters;
+        }
+    }
+    source.snippet = NonEmptyText::parse(&snippet).ok()?;
     Some(source)
 }
 
@@ -111,4 +123,51 @@ fn normalize_identity_token(token: &str) -> String {
         normalized.pop();
     }
     normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn projection_skips_whole_contexts_that_exceed_the_budget_without_mixing_urls() {
+        // Given: same-page contexts exceed the budget and another URL has distinct evidence.
+        let source: WebSource = serde_json::from_value(serde_json::json!({
+            "title": "Verified page title", "url": "https://example.com/page",
+            "snippet": "model prose"
+        }))
+        .expect("valid source");
+        let url = SafeSourceUrl::parse_redirect(source.url.as_str()).expect("safe URL");
+        let other = SafeSourceUrl::parse_redirect("https://example.com/other").expect("safe URL");
+        let first = NonEmptyText::parse("First complete verified context.").expect("valid context");
+        let last = NonEmptyText::parse("Final complete verified context.").expect("valid context");
+        let oversized = NonEmptyText::parse(&"가".repeat(MAXIMUM_PROJECTED_CONTEXT_CHARACTERS))
+            .expect("valid context");
+        let contexts = HashMap::from([
+            (url.clone(), vec![first.clone(), oversized, last.clone()]),
+            (
+                other,
+                vec![NonEmptyText::parse("Other page evidence").expect("valid context")],
+            ),
+        ]);
+        let pages = HashMap::from([(
+            url,
+            SearchEvidencePage {
+                body: String::new(),
+                headings: Vec::new(),
+                title: Some("Verified page title".to_owned()),
+            },
+        )]);
+
+        // When: independently verified contexts are projected for one URL.
+        let result = project_search_source(source, &pages, &contexts, &HashMap::new(), &[])
+            .expect("projected source");
+
+        // Then: complete contexts fit in order without truncation or evidence from another URL.
+        assert_eq!(
+            result.snippet.as_str(),
+            format!("{}\n{}", first.as_str(), last.as_str())
+        );
+        assert!(result.snippet.as_str().chars().count() <= MAXIMUM_PROJECTED_CONTEXT_CHARACTERS);
+    }
 }

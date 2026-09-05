@@ -140,13 +140,13 @@ agy-search --agy-path /absolute/path/to/agy status
 `-low`, `-medium`, or `-high` must use the matching `--effort`. When `--model`
 is omitted for Standard Search at low effort, `agy-search` makes one advisory
 catalog query, bounded to five seconds within the caller deadline, and selects
-`gemini-3.7-flash-low` only when that exact catalog entry is present. If it is
+`gemini-3.8-flash-low` only when that exact catalog entry is present. If it is
 absent or the advisory query fails while time remains, content omits `--model`
 and uses the provider default. For temporal Search, Research, Extract, Map,
 Crawl, and medium/high Search, the same bounded negotiation selects the matching
-`gemini-3.7-flash-{effort}` entry when advertised and otherwise falls back to
-the provider default. The catalog may supply `gemini-3.7-flash-medium` for the first bounded recovery
-and `gemini-3.7-flash-high` for the final recovery. Unavailable recovery tiers
+`gemini-3.8-flash-{effort}` entry when advertised and otherwise falls back to
+the provider default. The catalog may supply `gemini-3.8-flash-medium` for the first bounded recovery
+and `gemini-3.8-flash-high` for the final recovery. Unavailable recovery tiers
 are skipped and never duplicated, and every attempt shares the original deadline. The
 `AGY_SEARCH_AGY_PATH` environment variable can select the downstream executable
 without adding its path to command history. `AGY_SEARCH_CURL_PATH` can select a
@@ -164,7 +164,13 @@ caller listed that exact origin with `--source-url`. Unrestricted and
 domain-scoped Search and Research expose only `search_web`; after discovery the
 wrapper independently resolves and fetches each retained terminal publisher
 page, requires every audit exact value to occur on that same page, and publishes
-locally projected body context. Research remains all-or-nothing and its
+locally projected body context. Search preserves distinct verified passages from
+one page as newline-separated snippet context, adding complete passages within
+the 480-character projection budget. Source fetching keeps up to four requests
+in flight and starts the next queued page as soon as a slot becomes free.
+Successful Search proves the returned evidence, not completeness of every
+requested fact; extract missing context before answering those fields.
+Research remains all-or-nothing and its
 citations must equal retained source URLs. Exact-source Research reuses one
 immutable prefetched snapshot for primary synthesis, fail-closed recovery, and
 final verification. Use `--verification
@@ -369,7 +375,7 @@ these choices are recorded in [`docs/grounding-study.md`](docs/grounding-study.m
 
 ```bash
 AGY_SEARCH_AGY_PATH=/absolute/path/to/agy \
-AGY_SEARCH_REAL_MODEL=gemini-3.7-flash-low \
+AGY_SEARCH_REAL_MODEL=gemini-3.8-flash-low \
 cargo test --test real_antigravity --locked -- --ignored --nocapture
 ```
 

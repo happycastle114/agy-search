@@ -1,6 +1,6 @@
 //! Bounded curl retrieval for a DNS-pinned caller source.
 
-use std::path::PathBuf;
+use std::{future::Future, path::PathBuf};
 
 use thiserror::Error;
 use tokio::{task::JoinSet, time::Instant};
@@ -84,27 +84,12 @@ impl SourceFetcher {
         sources: &[SafeSourceUrl],
         deadline: Instant,
     ) -> Result<Vec<Result<FetchedSource, SourceFetchError>>, SourceFetchError> {
-        let mut fetched = Vec::with_capacity(sources.len());
-        for batch in sources.chunks(MAX_FETCH_CONCURRENCY) {
-            let mut tasks = JoinSet::new();
-            for (index, source) in batch.iter().enumerate() {
-                let worker = self.clone();
-                let source = source.clone();
-                tasks.spawn(async move { (index, worker.fetch(&source, deadline).await) });
-            }
-            let mut completed = std::collections::BTreeMap::new();
-            while let Some(result) = tasks.join_next().await {
-                let (index, response) = result.map_err(|_| SourceFetchError::TaskFailed)?;
-                completed.insert(index, response);
-            }
-            if completed.len() != batch.len() {
-                return Err(SourceFetchError::TaskFailed);
-            }
-            for response in completed.into_values() {
-                fetched.push(response);
-            }
-        }
-        Ok(fetched)
+        let requests = sources.iter().map(|source| {
+            let worker = self.clone();
+            let source = source.clone();
+            async move { worker.fetch(&source, deadline).await }
+        });
+        collect_bounded(requests).await
     }
 
     pub(crate) async fn fetch_pinned(
@@ -114,4 +99,30 @@ impl SourceFetcher {
     ) -> Result<FetchedSource, SourceFetchError> {
         transport::fetch_pinned(&self.curl_path, source, deadline).await
     }
+}
+
+async fn collect_bounded<F, T>(
+    requests: impl Iterator<Item = F>,
+) -> Result<Vec<T>, SourceFetchError>
+where
+    F: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    let mut remaining = requests.enumerate();
+    let mut tasks = JoinSet::new();
+    let mut completed = std::collections::BTreeMap::new();
+    loop {
+        while tasks.len() < MAX_FETCH_CONCURRENCY {
+            let Some((index, request)) = remaining.next() else {
+                break;
+            };
+            tasks.spawn(async move { (index, request.await) });
+        }
+        let Some(result) = tasks.join_next().await else {
+            break;
+        };
+        let (index, response) = result.map_err(|_| SourceFetchError::TaskFailed)?;
+        completed.insert(index, response);
+    }
+    Ok(completed.into_values().collect())
 }

@@ -125,16 +125,17 @@ impl SearchSourceEvidence {
     }
 
     pub(crate) fn verify_and_project(&self, search: &mut SearchResponse) -> Result<(), AgyError> {
-        let mut source_contexts = HashMap::new();
+        let mut source_contexts: HashMap<SafeSourceUrl, Vec<NonEmptyText>> = HashMap::new();
         let mut source_identities = HashMap::new();
         let candidates = std::mem::take(&mut search.evidence_audit.candidates);
         for verified in candidates
             .into_iter()
             .filter_map(|candidate| self.verify_candidate(candidate))
         {
-            source_contexts
-                .entry(verified.source)
-                .or_insert(verified.context);
+            let contexts = source_contexts.entry(verified.source).or_default();
+            if !contexts.contains(&verified.context) {
+                contexts.push(verified.context);
+            }
             if let Some(identity) = verified.identity {
                 source_identities
                     .entry(verified.candidate.url.clone())

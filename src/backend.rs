@@ -233,11 +233,11 @@ const fn preferred_model_policy(
     };
     let (generation, recovery_generation) = match (operation, verification, effort) {
         (Operation::Search, VerificationMode::Standard, Effort::Low) => (
-            GeminiFlashGeneration::V3_7,
-            Some(GeminiFlashGeneration::V3_7),
+            GeminiFlashGeneration::V3_8,
+            Some(GeminiFlashGeneration::V3_8),
         ),
         (Operation::Search, VerificationMode::Standard, Effort::Medium | Effort::High) => {
-            (GeminiFlashGeneration::V3_7, None)
+            (GeminiFlashGeneration::V3_8, None)
         }
         (
             Operation::Search,
@@ -248,7 +248,7 @@ const fn preferred_model_policy(
             Operation::Extract | Operation::Map | Operation::Crawl | Operation::Research,
             VerificationMode::Standard | VerificationMode::TemporalComparison,
             Effort::Low | Effort::Medium | Effort::High,
-        ) => (GeminiFlashGeneration::V3_7, None),
+        ) => (GeminiFlashGeneration::V3_8, None),
     };
     Some(ModelPreference {
         primary: PreferredModel::gemini_flash(generation, effort),

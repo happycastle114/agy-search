@@ -97,13 +97,13 @@ impl ModelCatalog {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GeminiFlashGeneration {
-    V3_7,
+    V3_8,
 }
 
 impl fmt::Display for GeminiFlashGeneration {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::V3_7 => "3.7",
+            Self::V3_8 => "3.8",
         })
     }
 }

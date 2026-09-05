@@ -34,5 +34,5 @@ jobs:
           binary_budget_bytes=1677722
           printf 'binary_version=%s\nbinary_bytes=%s\nbinary_budget_bytes=%s\n' \
             "$binary_version" "$binary_bytes" "$binary_budget_bytes"
-          test "$binary_version" = "agy-search 0.3.0"
+          test "$binary_version" = "agy-search 0.3.1"
           test "$binary_bytes" -lt "$binary_budget_bytes"

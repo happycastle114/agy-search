@@ -6,6 +6,112 @@ Apple Silicon development host. They are observations, not service
 level objectives or a guarantee for another machine, account, model, or provider
 state.
 
+## Version 0.3.1 (September 2026)
+
+Version 0.3.1 negotiates Gemini 3.8 Flash for primary and recovery
+efforts. Antigravity 1.1.26 advertised all three exact slugs on 2026-09-05.
+Explicit pins remain strict; an unavailable preferred model still uses the
+provider default after the bounded advisory lookup. Historical 3.7 policy and
+measurements below describe the released 0.3.0 build, not this source update.
+
+Source-body fetching now refills each of its four worker slots as it completes,
+instead of waiting for the slowest member of each four-page batch. This keeps
+input order, per-page errors, DNS pinning, and the shared deadline. It benefits
+requests with more than four sources and uneven response times; it does not
+remove model inference or publisher latency.
+
+The skill's Quick and Verified paths now consume independently fetched Search
+body context directly when it proves all requested fields. Extract remains the
+follow-up for missing evidence. This removes one redundant model call only
+when the returned body context is sufficient; a valid JSON response alone does
+not prove answer completeness.
+
+### Isolated model comparison
+
+On 2026-09-05, the installed 0.3.0 binary ran three serial trials per explicit
+low-effort model, alternating 3.7 then 3.8. The binary was unchanged throughout
+this comparison, so these results isolate model selection from the source
+fetch scheduler changes. The shared host was also compiling the candidate.
+
+```bash
+agy-search --model MODEL --effort low --timeout 75 search \
+  'According to IANA, what are example.com and example.org reserved for, and can they be registered or transferred?' \
+  --domain iana.org -n 3
+```
+
+The independent [IANA oracle](https://www.iana.org/help/example-domains)
+requires both documentation/example use and non-registration/non-transfer in
+the public body context, canonical IANA URLs, and no invented dates.
+
+| Model | Wall seconds, trials 1 / 2 / 3 | CLI successes | Complete answers |
+|---|---|---:|---:|
+| Gemini 3.7 Flash low | 65.10 / 20.83 / 17.71 | 2/3 | 0/3 |
+| Gemini 3.8 Flash low | 29.55 / 52.70 / 15.79 | 3/3 | 2/3 |
+
+The first 3.7 attempt failed closed with `agy output invalid`. Its other two
+responses omitted registration/transfer. The second 3.8 response also omitted
+that field. The 3.8 successful median was 29.55 seconds; the 3.7 successful
+median was 19.27 seconds, but neither successful 3.7 response passed the full
+question oracle. This small sample does not establish a model speedup or an
+accuracy rate for general search. It does demonstrate why the skill must
+extract missing fields instead of treating every successful search as a
+complete answer.
+
+The source update also retains distinct, independently verified contexts from
+the same page instead of publishing only its first audit context. Additional
+contexts are appended whole within the existing 480-character projection
+budget; duplicate or unverified contexts add nothing. This fixes a deterministic
+projection loss. The comparison above did not capture private model audits, so
+it does not establish that this loss caused the observed incomplete answers.
+
+### Final source-build smoke
+
+The first source candidate still omitted one field on both the IANA query
+(18.70 seconds) and a Korean query asking for the Gemini 3.8 Flash model ID and
+all supported thinking levels (20.08 seconds). Standard Search instructions
+were then strengthened to check each requested field, retain distinct audit
+candidates even for a shared URL, and spend an unused restricted-search slot
+on a missing fact without increasing the two-call budget.
+
+The final build ran those same two queries once each, serially, with no explicit
+model pin. A local adapter recorded only the selected model argument: both
+primary calls selected `gemini-3.8-flash-low`, with no recovery invocation.
+
+| Query | Wall time | Requested evidence in public output |
+|---|---:|---|
+| IANA purpose plus registration/transfer | 22.70 s | Both facts, canonical IANA pages, null dates |
+| Korean Gemini model ID plus thinking levels | 20.71 s | `gemini-3.8-flash` and `low, medium, high`, official Google pages, null dates |
+
+These are two passing smoke observations, not a statistical estimate of the
+prompt change's effect. The model comparison still rules out a blanket speedup
+claim. One separate exact-IANA Extract took 16.50 seconds and returned both
+facts, demonstrating the available follow-up when Search context is incomplete.
+The final complete Search responses can avoid that extra model call under the
+updated skill. The final source changes preserve the existing source-verification
+boundaries; they do not guarantee completeness for arbitrary questions.
+
+### Validation and local installation
+
+`cargo fmt --all -- --check`, locked Clippy across all targets/features with
+warnings denied, the distribution build, and the locked test suite passed:
+294 tests passed and 8 opt-in live tests remained ignored. The manual live
+search/extraction observations above were run separately. The OpenCode plugin
+suite passed 11 tests. The LSP daemon was unresponsive; compiler/Clippy checks
+provide the Rust diagnostic evidence for this run.
+
+The macOS ARM64 distribution binary is 1,205,360 bytes, SHA-256
+`fe7c65a3755b594cc49e83851d9704e1544df8aa793801ccec90d030c1c98179`.
+It was installed locally after preserving the old binary. This was the prerelease
+source build retaining the 0.3.0 package version; release artifacts use 0.3.1.
+The OpenCode skill and dependency rule were synchronized through a separate
+local development package, preserving the original release directory.
+OpenCode 1.18.29's `debug skill` resolved the updated development skill;
+CLI `status` confirmed Antigravity 1.1.26 with 14 available catalog entries.
+A fresh search through the installed executable used the exact IANA source,
+returned the requested documentation-purpose evidence in 11.64 seconds, and
+again selected `gemini-3.8-flash-low` without a caller model pin.
+Long-running OpenCode sessions need a restart to load the updated guidance.
+
 ## Budget
 
 | Surface | Budget |

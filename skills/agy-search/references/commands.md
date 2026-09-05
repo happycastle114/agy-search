@@ -2,7 +2,7 @@
 
 ## Global contract
 
-Before the first content command in an agent session, require agy-search 0.3.0
+Before the first content command in an agent session, require agy-search 0.3.1
 or newer and use this cheap local preflight. Do not invoke `agy-search models`
 unless an explicit pin is requested:
 
@@ -28,10 +28,10 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
   the current environment.
 - Content commands default to `--effort low`. Raise effort only for deliberate
   deep synthesis; explicit effort always overrides the default.
-- Ordinary work omits both `agy-search models` and `--model`. CLI 0.3.0
+- Ordinary work omits both `agy-search models` and `--model`. CLI 0.3.1
   performs a bounded advisory catalog lookup internally and prefers exact
-  `gemini-3.7-flash-low` when present without creating a caller model pin.
-  Temporal/research/content operations negotiate the matching Gemini 3.7 Flash
+  `gemini-3.8-flash-low` when present without creating a caller model pin.
+  Temporal/research/content operations negotiate the matching Gemini 3.8 Flash
   effort when advertised. For an explicit pin whose returned slug ends in
   `-low`, `-medium`, or `-high`, pass
   the matching `--effort`; a mismatch is rejected before downstream execution.
@@ -49,8 +49,9 @@ agy-search [--agy-path PATH] [--model SLUG] [--effort low|medium|high] \
   may use up to eight so unresolved scopes can be discovered and then verified
   one at a time. When its safe hidden inventory is recoverable, each scope gets
   one concurrent run of at most two calls, with at most four scopes in flight
-  and the original shared deadline. Temporal research remains one-shot with up
-  to four research-tool calls and never uses per-scope recovery.
+  and the original shared deadline. Temporal research remains one-shot with
+  `min(2 * max_sources + 1, 12)` attempted research-tool calls and never uses
+  per-scope recovery. Exact-source prefetched operations expose no network tools.
 - Successful stdout is canonical JSON. Diagnostics use stderr. `--json` is an
   accepted explicit compatibility flag on every subcommand.
 - In Standard Search and Standard Research, `date` is optional: normalize a

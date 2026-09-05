@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Final
 
 
-PREFERRED_MODEL: Final = "gemini-3.7-flash-low"
-FIRST_RETRY_MODEL: Final = "gemini-3.7-flash-medium"
-FINAL_RETRY_MODEL: Final = "gemini-3.7-flash-high"
-QUALITY_LOW_MODEL: Final = "gemini-3.7-flash-low"
-QUALITY_MEDIUM_MODEL: Final = "gemini-3.7-flash-medium"
-QUALITY_HIGH_MODEL: Final = "gemini-3.7-flash-high"
+PREFERRED_MODEL: Final = "gemini-3.8-flash-low"
+FIRST_RETRY_MODEL: Final = "gemini-3.8-flash-medium"
+FINAL_RETRY_MODEL: Final = "gemini-3.8-flash-high"
+QUALITY_LOW_MODEL: Final = "gemini-3.8-flash-low"
+QUALITY_MEDIUM_MODEL: Final = "gemini-3.8-flash-medium"
+QUALITY_HIGH_MODEL: Final = "gemini-3.8-flash-high"
 TRACE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_TRACE"
 CATALOG_MODE_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_MODE"
 CATALOG_DELAY_ENVIRONMENT: Final = "AGY_SEARCH_CATALOG_DELAY"

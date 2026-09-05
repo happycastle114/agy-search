@@ -42,7 +42,18 @@ pub(super) const fn tool_instruction(
              `/latest` endpoint is acceptable only when it resolves directly to the requested \
              item. A bare origin is provisional discovery only; the wrapper deterministically \
              promotes one uniquely matching deep same-origin link or rejects it. Never invent or \
-             edit a slug, follow a link, or return an unproven landing page."
+             edit a slug, follow a link, or return an unproven landing page. \
+             Before finishing, check every separately requested fact or field in INPUT_JSON.query \
+             against completed search evidence. Create a distinct audit candidate for each supported \
+             fact, even when several candidates share one source URL. Copy a contiguous, \
+             predicate-bearing evidence_excerpt and value for each: an identifier, code example, \
+             page title, or generic feature description does not prove a requested status or \
+             complete capability list. For enumerated capabilities retain every requested member \
+             in that page's supporting passage. For a multi-part question, do not drop one part \
+             merely because another is answered. Prefer the deepest page proving the complete \
+             question. For restricted discovery, if a requested fact remains unsupported and the \
+             second search is unused, use it for that missing fact with INPUT_JSON.query as the \
+             exact prefix. Stay within the existing tool budget and never invent missing evidence."
         }
         (Operation::Search, VerificationMode::TemporalComparison) => {
             "When source_restriction contains exact URL members and no domains, use only \

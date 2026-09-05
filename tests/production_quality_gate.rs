@@ -5,7 +5,7 @@ use std::{collections::HashSet, env, io, process::Command, time::Instant};
 use serde_json::Value;
 use url::Url;
 
-const GEMINI_MODEL_URL: &str = "https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash";
+const GEMINI_MODEL_URL: &str = "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash";
 const GEMINI_LATEST_URL: &str = "https://ai.google.dev/gemini-api/docs/latest-model";
 const GEMINI_CHANGELOG_URL: &str = "https://ai.google.dev/gemini-api/docs/changelog";
 const GEMINI_THINKING_URL: &str = "https://ai.google.dev/gemini-api/docs/thinking";
@@ -214,7 +214,7 @@ fn run_research_and_source_extract(
         "--timeout",
         "300",
         "research",
-        "Using only the four exact caller-supplied official Google AI pages, return exactly four distinct findings and four retained sources: (1) the exact Gemini 3.7 Flash generally-available statement, (2) the Gemini 3.7 Flash model page's multimodal statement and complete listed input types, (3) the official thinking guide table row listing every supported thinking level for gemini-3.7-flash, and (4) the official Google Search grounding guide's exact real-time-web explanation. Cite one supplied page for each numbered claim and copy predicate-bearing body evidence without paraphrasing.",
+        "Using only the four exact caller-supplied official Google AI pages, return exactly four distinct findings and four retained sources: (1) the exact Gemini 3.8 Flash generally-available statement, (2) the Gemini 3.8 Flash model page's supported data types row with every listed input type, (3) the official thinking guide table row listing every supported thinking level for gemini-3.8-flash, and (4) the official Google Search grounding guide's exact real-time-web explanation. Cite one supplied page for each numbered claim and copy predicate-bearing body evidence without paraphrasing.",
         "--max-sources",
         "4",
     ];
@@ -245,7 +245,9 @@ fn run_research_and_source_extract(
     if !source_urls.contains(ga_url.as_str()) {
         return Err(io::Error::other("GA finding did not retain its official source").into());
     }
-    require_finding_citation(&research, "multimodal", &[GEMINI_MODEL_URL])?;
+    for input_type in ["input", "text", "image", "video", "audio", "pdf"] {
+        require_finding_citation(&research, input_type, &[GEMINI_MODEL_URL])?;
+    }
     require_finding_citation(&research, "thinking", &[GEMINI_THINKING_URL])?;
     let search_url = require_finding_citation(
         &research,
@@ -259,18 +261,18 @@ fn run_research_and_source_extract(
     let extract_cases = [
         (
             ga_url.as_str(),
-            "Extract the exact Gemini 3.7 Flash generally-available statement from this announcement page; do not discuss unrelated capabilities.",
-            &["3.7", "generally available"][..],
+            "Extract the exact Gemini 3.8 Flash generally-available statement from this announcement page; do not discuss unrelated capabilities.",
+            &["3.8", "generally available"][..],
         ),
         (
             GEMINI_MODEL_URL,
-            "Extract the exact Gemini 3.7 Flash multimodal statement and its complete listed input types from this model page.",
-            &["3.7", "multimodal"][..],
+            "Extract the exact Gemini 3.8 Flash supported data types row and all five listed input types from this model page.",
+            &["3.8", "input", "text", "image", "video", "audio", "pdf"][..],
         ),
         (
             GEMINI_THINKING_URL,
-            "Extract the exact gemini-3.7-flash table row and every supported thinking level from this thinking guide.",
-            &["thinking", "low", "medium", "high"][..],
+            "Extract the exact gemini-3.8-flash table row and every supported thinking level from this thinking guide.",
+            &["gemini-3.8-flash", "thinking", "low", "medium", "high"][..],
         ),
         (
             search_url.as_str(),
