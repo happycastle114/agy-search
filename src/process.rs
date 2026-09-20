@@ -2,8 +2,6 @@
 
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
-#[cfg(all(test, unix))]
-use nix::{errno::Errno, sys::signal::kill};
 #[cfg(unix)]
 use nix::{
     sys::signal::{Signal, killpg},
@@ -55,6 +53,48 @@ struct Capture {
     exceeded: bool,
 }
 
+#[derive(Debug)]
+struct ProcessGroup {
+    child: Child,
+    #[cfg(unix)]
+    pgid: Option<Pid>,
+}
+
+impl ProcessGroup {
+    fn new(child: Child) -> Self {
+        #[cfg(unix)]
+        let pgid = child
+            .id()
+            .and_then(|id| i32::try_from(id).ok())
+            .map(Pid::from_raw);
+        Self {
+            child,
+            #[cfg(unix)]
+            pgid,
+        }
+    }
+
+    async fn terminate(&mut self) {
+        self.kill_group();
+        let _ = self.child.start_kill();
+        let _ = self.child.wait().await;
+    }
+
+    fn kill_group(&self) {
+        #[cfg(unix)]
+        if let Some(pgid) = self.pgid {
+            let _ = killpg(pgid, Signal::SIGKILL);
+        }
+    }
+}
+
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        self.kill_group();
+        let _ = self.child.start_kill();
+    }
+}
+
 pub(crate) async fn run(request: ProcessRequest) -> Result<ProcessOutput, AgyError> {
     run_bounded(request, CaptureLimits::default()).await
 }
@@ -76,21 +116,22 @@ pub(crate) async fn run_bounded(
     #[cfg(unix)]
     command.process_group(0);
 
-    let mut child = command.spawn().map_err(|_| AgyError::Unavailable)?;
-    let stdout = child.stdout.take().ok_or(AgyError::Unavailable)?;
-    let stderr = child.stderr.take().ok_or(AgyError::Unavailable)?;
+    let child = command.spawn().map_err(|_| AgyError::Unavailable)?;
+    let mut group = ProcessGroup::new(child);
+    let stdout = group.child.stdout.take().ok_or(AgyError::Unavailable)?;
+    let stderr = group.child.stderr.take().ok_or(AgyError::Unavailable)?;
     let execution = async {
         tokio::try_join!(
             read_bounded(stdout, limits.stdout),
             read_bounded(stderr, limits.stderr),
-            child.wait()
+            group.child.wait()
         )
     };
 
     let completed = if let Ok(result) = time::timeout(request.timeout, execution).await {
         result.map_err(|_| AgyError::Unavailable)?
     } else {
-        terminate(&mut child).await;
+        group.terminate().await;
         return Err(AgyError::Timeout);
     };
     let (stdout, stderr, status) = completed;
@@ -128,73 +169,5 @@ where
     Ok(capture)
 }
 
-async fn terminate(child: &mut Child) {
-    #[cfg(unix)]
-    if let Some(id) = child.id().and_then(|id| i32::try_from(id).ok()) {
-        let _ = killpg(Pid::from_raw(id), Signal::SIGKILL);
-    }
-    let _ = child.start_kill();
-    let _ = child.wait().await;
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn missing_executable_is_sanitized() {
-        let request = ProcessRequest {
-            argv: vec!["/definitely/missing/agy".to_owned()],
-            cwd: std::env::temp_dir(),
-            timeout: Duration::from_secs(1),
-        };
-
-        assert!(matches!(run(request).await, Err(AgyError::Unavailable)));
-    }
-
-    #[tokio::test]
-    async fn capture_is_bounded_while_the_reader_is_fully_drained() {
-        let reader = tokio::io::repeat(42).take((MAX_CAPTURE_BYTES + 1) as u64);
-        let capture = read_bounded(reader, MAX_CAPTURE_BYTES).await;
-
-        assert!(matches!(
-            capture,
-            Ok(Capture { bytes, exceeded: true }) if bytes.len() == MAX_CAPTURE_BYTES
-        ));
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn timed_out_process_group_kills_background_children()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let temporary = tempfile::tempdir()?;
-        let pid_file = temporary.path().join("child.pid");
-        let request = ProcessRequest {
-            argv: vec![
-                "/bin/sh".to_owned(),
-                "-c".to_owned(),
-                "sleep 10 & echo $! > \"$1\"; wait".to_owned(),
-                "agy-search-timeout-test".to_owned(),
-                pid_file.to_string_lossy().into_owned(),
-            ],
-            cwd: std::env::temp_dir(),
-            timeout: Duration::from_millis(200),
-        };
-
-        assert!(matches!(run(request).await, Err(AgyError::Timeout)));
-        let pid = std::fs::read_to_string(pid_file)?.trim().parse::<i32>()?;
-        let mut child_is_dead = false;
-        for _ in 0..50 {
-            if matches!(kill(Pid::from_raw(pid), None), Err(Errno::ESRCH)) {
-                child_is_dead = true;
-                break;
-            }
-            time::sleep(Duration::from_millis(10)).await;
-        }
-        assert!(
-            child_is_dead,
-            "background child survived process-group kill"
-        );
-        Ok(())
-    }
-}
+mod tests;

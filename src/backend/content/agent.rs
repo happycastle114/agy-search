@@ -16,6 +16,7 @@ tools:
   - search_web
 mainAgent: true
 subagent: false
+inheritCustomizations: false
 inheritMcp: false
 model: inherit
 commandExecutionPolicy: off
@@ -29,6 +30,7 @@ description: Isolated synthesis over caller-prefetched source evidence.
 tools: []
 mainAgent: true
 subagent: false
+inheritCustomizations: false
 inheritMcp: false
 model: inherit
 commandExecutionPolicy: off
@@ -86,11 +88,53 @@ mod tests {
     use super::*;
     use crate::{source_restriction::SourceRestriction, types::ResearchToolBudget};
 
+    #[derive(Debug, Eq, PartialEq)]
+    struct Isolation {
+        inherit_customizations: bool,
+        inherit_mcp: bool,
+    }
+
+    fn parse_isolation(definition: &str) -> Result<Isolation, Box<dyn std::error::Error>> {
+        let mut inherit_customizations = None;
+        let mut inherit_mcp = None;
+        for line in definition.lines().skip(1).take_while(|line| *line != "---") {
+            let Some((key, value)) = line.split_once(':') else {
+                continue;
+            };
+            match key.trim() {
+                "inheritCustomizations" => inherit_customizations = Some(value.trim().parse()?),
+                "inheritMcp" => inherit_mcp = Some(value.trim().parse()?),
+                _ => {}
+            }
+        }
+        Ok(Isolation {
+            inherit_customizations: inherit_customizations
+                .ok_or("missing inheritCustomizations field")?,
+            inherit_mcp: inherit_mcp.ok_or("missing inheritMcp field")?,
+        })
+    }
+
     fn policy(restriction: SourceRestriction) -> ResearchToolPolicy {
         ResearchToolPolicy::Restricted {
             budget: ResearchToolBudget::StandardSearch,
             restriction: Box::new(restriction),
         }
+    }
+
+    #[test]
+    fn agent_profiles_disable_ambient_customizations() -> Result<(), Box<dyn std::error::Error>> {
+        // Given: both machine-consumed agent definitions.
+        for definition in [SEARCH_ONLY, NO_TOOLS] {
+            // When: isolation fields are parsed. Then: both inheritance paths are disabled.
+            assert_eq!(
+                parse_isolation(definition)?,
+                Isolation {
+                    inherit_customizations: false,
+                    inherit_mcp: false,
+                }
+            );
+        }
+        Ok(())
     }
 
     #[test]
