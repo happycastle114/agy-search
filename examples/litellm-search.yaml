@@ -1,0 +1,8 @@
+search_tools:
+  - search_tool_name: agy_search
+    litellm_params:
+      search_provider: perplexity
+      api_base: http://127.0.0.1:18091
+      api_key: os.environ/AGY_SEARCH_API_KEY
+      timeout: 125
+      max_retries: 0

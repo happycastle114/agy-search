@@ -1,13 +1,15 @@
 # agy-search
 
-`agy-search` is a small standalone Rust CLI that turns Google Antigravity print
-mode into a source-backed JSON interface for web search, extraction, URL
-mapping, bounded crawling, and cited research. It needs no separate search API
-key and no Python or Node.js runtime.
+`agy-search` is a Rust CLI and optional server runtime that turns Google
+Antigravity print mode into a source-backed JSON interface for web search,
+extraction, URL mapping, bounded crawling, and cited research. The standalone
+CLI needs no separate search API key and no Python or Node.js runtime. The
+optional server adds a LiteLLM Search provider endpoint and MCP transports while
+reusing the same source-validation boundary.
 
 Antigravity 1.1.8 added print-mode `json`, `stream-json`, and custom JSON Schema
-enforcement. This release requires 1.1.20, where headless print error handling
-is reliable, and is tested with 1.1.22. `agy-search` uses the structured
+enforcement. This release requires 1.1.20 or newer. AGY 1.2.7 was the latest
+upstream release reviewed for this work. `agy-search` uses the structured
 contract, disables slash expansion so input stays data, runs inside an isolated
 least-privilege custom agent, and validates event evidence and results again before
 anything reaches stdout.
@@ -84,6 +86,34 @@ check.
 Antigravity manages its own background updates during regular runs. `agy-search`
 never updates either executable implicitly; run update workflows only when that
 mutation is intentional.
+
+## Optional server runtime
+
+The optional `agy-search-server` binary provides authenticated HTTP search for
+LiteLLM and MCP over either stdio or Streamable HTTP. It is built behind the
+`server` feature, so the default CLI stays a separate, small binary.
+
+```bash
+cargo build --locked --features server --bin agy-search-server
+export AGY_SEARCH_API_KEY='replace-with-a-random-secret'
+./target/debug/agy-search-server http
+curl -i http://127.0.0.1:18091/healthz
+```
+
+The default listener is loopback-only. `/healthz` is unauthenticated liveness;
+`/readyz`, `/search`, and `/mcp` require `Authorization: Bearer` with the token
+read from `AGY_SEARCH_API_KEY` by default. Configure explicit Host and Origin
+allowlists before placing a reverse proxy or browser client in front of it.
+
+See [docs/server.md](docs/server.md) for endpoint, security, input-bound, MCP,
+LiteLLM, and rollback details. Ready-to-copy configurations are in
+[examples/litellm-search.yaml](examples/litellm-search.yaml),
+[examples/mcp-stdio.json](examples/mcp-stdio.json), and
+[examples/mcp-http.json](examples/mcp-http.json).
+
+The runtime's standard mode is intentionally narrower than the CLI's temporal
+comparison mode. Use the CLI when the task requires explicit scopes, exact
+source sets, and an `as-of` date.
 
 ## Commands
 
@@ -223,6 +253,12 @@ The skill saves potentially large responses under `.agy-search/` and reads only
 the needed fields, limiting context use without losing citation URLs.
 
 ## Performance
+
+The 0.4.0 server reuses successful advisory model catalogs for 60 seconds. In a
+controlled HTTP fixture benchmark, warm catalog reuse reduced wrapper latency
+from 455.8 ms to 168.8 ms. This measures local discovery overhead, not model
+inference or production search latency. Explicit model pins, version checks,
+and readiness always remain fresh. See [the method and limits](docs/performance.md).
 
 The 0.2.4 distribution binaries measure 1,072,064 B on Apple Silicon and
 1,395,344 B on Linux x86-64. On the measured host on 2026-08-06, real

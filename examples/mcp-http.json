@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "agy-search": {
+      "url": "http://127.0.0.1:18091/mcp",
+      "headers": {
+        "Authorization": "Bearer ${AGY_SEARCH_API_KEY}"
+      }
+    }
+  }
+}

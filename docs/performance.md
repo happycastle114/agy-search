@@ -2,9 +2,73 @@
 
 `agy-search` keeps wrapper work small and treats Antigravity and its web tools
 as an external latency boundary. The local measurements below are from the
-Apple Silicon development host. They are observations, not service
-level objectives or a guarantee for another machine, account, model, or provider
-state.
+Apple Silicon development host. They are observations, not service level
+objectives or a guarantee for another machine, account, model, or provider state.
+
+## Version 0.4.0: runtime boundaries
+
+The server is an optional Cargo feature and a separate binary. It does not add
+the HTTP/MCP dependency graph to the default `agy-search` CLI binary. The server
+shares the CLI's source-validation and process boundaries, but it adds a bounded
+request semaphore, HTTP/MCP parsing, and structured diagnostics. Measure its
+latency separately from the standalone CLI.
+
+On the Apple Silicon development host, with AGY 1.2.7 and three `hyperfine`
+runs on 2026-09-20, a local `agy --version` averaged **51.1 ms** and `agy
+models` averaged **2.595 s** (2.406–2.897 s). These are catalog/process
+observations, not a request latency SLO and not a model-quality comparison.
+
+The server caches only a successful advisory, unpinned catalog lookup for the
+same executable and working directory. Its default TTL is 60 seconds; explicit
+model pins, status/readiness, version preflight, failures, and empty catalogs
+remain fresh. This avoids repeatedly paying the measured catalog boundary for
+eligible requests without hiding a caller-selected model or an availability
+check. Provider inference, web-tool work, and publisher fetches remain the
+dominant variable latency sources.
+
+A controlled wrapper benchmark used the debug HTTP binary, public fixture
+responses, `curl`, ten measured runs after two warmups per condition, and an
+artificial 200 ms `agy models` delay. With `AGY_SEARCH_CATALOG_TTL_SECONDS=0`,
+the mean was **455.8 ± 42.8 ms**. With the default 60-second TTL and a warm
+catalog, it was **168.8 ± 3.2 ms**: **2.70 ± 0.26×** faster, or a **63.0%**
+decrease. The test servers bound to ports 18094 and 18095 and were stopped by
+their cleanup trap.
+
+This isolates wrapper-side catalog reuse only. Its deliberate fixture delay
+does not predict real AGY, model, publisher, or network latency. The separate
+real `agy models` baseline above remains 2.595 seconds on the measured host;
+neither result is projected as a production latency promise. Reproduce the
+controlled case with the recorded benchmark script and JSON/log artifacts from
+the release evidence, keeping the binary, fixture, warmup count, curl request,
+and TTL conditions unchanged.
+
+Use a guarded before/after method when changing this path:
+
+```bash
+hyperfine --runs 3 'agy --version' 'agy models'
+AGY_SEARCH_CATALOG_TTL_SECONDS=0 ./target/debug/agy-search-server --help
+AGY_SEARCH_CATALOG_TTL_SECONDS=60 ./target/debug/agy-search-server --help
+```
+
+The last two commands only confirm configuration parsing. A meaningful runtime
+comparison must use the same authenticated AGY account, query, source policy,
+deadline, and network conditions, and must report catalog behavior separately
+from variable upstream latency.
+
+### Runtime observations
+
+Real AGY 1.2.7 raw HTTP requests for an exact-IANA query returned HTTP 200 in
+32.8375 seconds and 8.4382 seconds. Those two requests were not an isolated
+cache experiment and cannot establish a warm-cache effect or a median.
+
+Two native LiteLLM domain-scoped attempts returned HTTP 504 and HTTP 502. A
+subsequent known-good IANA query returned HTTP 200. That final response proves
+one end-to-end compatibility case only; it is not evidence of reliable provider
+availability or a latency claim. In separate MCP checks, the official Python
+SDK 2.2.0 completed HTTP Search with default modern negotiation and stdio
+Extract with legacy negotiation against real AGY, listed the five published
+tools, and received `is_error: false` responses. Both transports also passed
+default-client tool discovery.
 
 ## Version 0.3.1 (September 2026)
 

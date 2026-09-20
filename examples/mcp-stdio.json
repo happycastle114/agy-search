@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agy-search": {
+      "command": "agy-search-server",
+      "args": [
+        "--agy-path",
+        "/usr/local/bin/agy",
+        "--timeout",
+        "120",
+        "stdio"
+      ]
+    }
+  }
+}

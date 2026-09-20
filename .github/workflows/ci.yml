@@ -26,13 +26,24 @@ jobs:
       - name: Run all tests
         run: cargo test --all-targets --all-features --locked
       - name: Build the distribution binary
-        run: cargo build --profile dist --locked
+        run: cargo build --profile dist --locked --bin agy-search
       - name: Smoke-test the standalone artifact
         run: |
+          package_version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "agy-search") | .version')
           binary_version=$(./target/dist/agy-search --version)
           binary_bytes=$(stat -c %s ./target/dist/agy-search)
           binary_budget_bytes=1677722
-          printf 'binary_version=%s\nbinary_bytes=%s\nbinary_budget_bytes=%s\n' \
-            "$binary_version" "$binary_bytes" "$binary_budget_bytes"
-          test "$binary_version" = "agy-search 0.3.1"
+          printf 'package_version=%s\nbinary_version=%s\nbinary_bytes=%s\nbinary_budget_bytes=%s\n' \
+            "$package_version" "$binary_version" "$binary_bytes" "$binary_budget_bytes"
+          test "$binary_version" = "agy-search $package_version"
           test "$binary_bytes" -lt "$binary_budget_bytes"
+      - name: Build and smoke-test the optional server artifact
+        run: |
+          package_version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "agy-search") | .version')
+          cargo build --profile dist --locked --features server --bin agy-search-server
+          server_version=$(./target/dist/agy-search-server --version)
+          printf 'package_version=%s\nserver_version=%s\n' \
+            "$package_version" "$server_version"
+          test "$server_version" = "agy-search-server $package_version"
