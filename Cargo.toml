@@ -1,9 +1,10 @@
 [package]
 name = "agy-search"
-version = "0.3.1"
+default-run = "agy-search"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Source-backed web research CLI for Google Antigravity"
+description = "Source-backed web research CLI and server for Google Antigravity"
 license = "MIT"
 repository = "https://github.com/happycastle114/agy-search"
 homepage = "https://github.com/happycastle114/agy-search"
@@ -14,24 +15,44 @@ publish = false
 
 [package.metadata.dist]
 dist = true
+features = ["server"]
+
+[features]
+default = []
+server = [
+    "dep:axum", "dep:headers", "dep:rmcp", "dep:secrecy", "dep:subtle",
+    "dep:tokio-util", "dep:tower-http", "dep:tracing", "dep:tracing-subscriber",
+    "tokio/io-std", "tokio/net", "tokio/rt-multi-thread", "tokio/signal", "tokio/sync",
+]
 
 [dependencies]
+axum = { version = "=0.8.9", optional = true }
 clap = { version = "=4.6.5", features = ["derive", "env"] }
+headers = { version = "=0.4.1", optional = true }
+rmcp = { version = "=3.4.0", default-features = false, features = ["server", "transport-io", "transport-streamable-http-server"], optional = true }
 schemars = "=1.2.2"
+secrecy = { version = "=0.10.3", optional = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+subtle = { version = "=2.6.1", optional = true }
 tempfile = "=3.27.0"
 thiserror = "=2.0.19"
 tokio = { version = "=1.53.1", features = ["io-util", "macros", "process", "rt", "time"] }
+tokio-util = { version = "=0.7.19", features = ["rt"], optional = true }
+tower-http = { version = "=0.7.1", features = ["limit", "trace"], optional = true }
+tracing = { version = "=0.1.44", optional = true }
+tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "json"], optional = true }
 url = { version = "=2.5.8", features = ["serde"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "=0.31.3", features = ["process", "signal"] }
 
 [dev-dependencies]
+rmcp = { version = "=3.4.0", default-features = false, features = ["client", "transport-streamable-http-client-reqwest"] }
 assert_cmd = "=2.2.2"
 predicates = "=3.1.4"
 proptest = "=1.11.0"
+tower = { version = "=0.5.3", features = ["util"] }
 
 [profile.release]
 opt-level = "z"
@@ -106,3 +127,8 @@ install-path = "CARGO_HOME"
 # Keep the verified application archive as the installer's only executable payload.
 # Updating is done by rerunning the same release installer.
 install-updater = false
+
+[[bin]]
+name = "agy-search-server"
+path = "src/bin/agy-search-server.rs"
+required-features = ["server"]

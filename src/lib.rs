@@ -42,3 +42,7 @@ pub async fn run(cli: Cli) -> Result<(), AgyError> {
     let response = backend::execute(invocation).await?;
     output::emit(&response, destination.as_deref())
 }
+
+/// Optional HTTP and MCP runtime for the validated research backend.
+#[cfg(feature = "server")]
+pub mod server;

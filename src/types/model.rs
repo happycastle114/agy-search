@@ -131,7 +131,10 @@ impl From<PreferredModel> for ResolvedModel {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, ValueEnum, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub(crate) enum Effort {
     Low,
     Medium,

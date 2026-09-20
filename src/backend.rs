@@ -20,6 +20,11 @@ use crate::{
 
 mod content;
 
+#[cfg(feature = "server")]
+mod discovery;
+#[cfg(feature = "server")]
+pub(crate) use discovery::{DiscoveryCache, execute_cached};
+
 #[cfg(test)]
 #[path = "backend/catalog_policy_test.rs"]
 mod catalog_policy_test;
@@ -175,45 +180,47 @@ async fn select_preferred_content_models(
     };
     let timeout = deadline.remaining()?.min(MAX_ADVISORY_CATALOG_DISCOVERY);
     match discover_models(executable, cwd.to_path_buf(), timeout).await {
-        Ok(catalog) => {
-            let primary = catalog.preferred(preference.primary);
-            let Some(primary_model) = primary.clone() else {
-                return Ok(ContentModels::fixed(None));
-            };
-            let Some(recovery_generation) = preference.recovery_generation else {
-                return Ok(ContentModels {
-                    primary,
-                    recoveries: [
-                        RecoveryModel::Selected(primary_model.clone()),
-                        RecoveryModel::Selected(primary_model),
-                    ],
-                });
-            };
-            let first_recovery = catalog.preferred(PreferredModel::gemini_flash(
-                recovery_generation,
-                Effort::Medium,
-            ));
-            let final_recovery = catalog.preferred(PreferredModel::gemini_flash(
-                recovery_generation,
-                Effort::High,
-            ));
-            let recoveries = match (first_recovery, final_recovery) {
-                (Some(medium), Some(high)) => [
-                    RecoveryModel::Selected(medium),
-                    RecoveryModel::Selected(high),
-                ],
-                (Some(model), None) | (None, Some(model)) => {
-                    [RecoveryModel::Selected(model), RecoveryModel::Disabled]
-                }
-                (None, None) => [RecoveryModel::Disabled, RecoveryModel::Disabled],
-            };
-            Ok(ContentModels {
-                primary,
-                recoveries,
-            })
-        }
+        Ok(catalog) => Ok(select_catalog_models(&catalog, preference)),
         Err(_) if deadline.remaining().is_ok() => Ok(ContentModels::fixed(None)),
         Err(_) => Err(AgyError::Timeout),
+    }
+}
+
+fn select_catalog_models(catalog: &ModelCatalog, preference: ModelPreference) -> ContentModels {
+    let primary = catalog.preferred(preference.primary);
+    let Some(primary_model) = primary.clone() else {
+        return ContentModels::fixed(None);
+    };
+    let Some(recovery_generation) = preference.recovery_generation else {
+        return ContentModels {
+            primary,
+            recoveries: [
+                RecoveryModel::Selected(primary_model.clone()),
+                RecoveryModel::Selected(primary_model),
+            ],
+        };
+    };
+    let first_recovery = catalog.preferred(PreferredModel::gemini_flash(
+        recovery_generation,
+        Effort::Medium,
+    ));
+    let final_recovery = catalog.preferred(PreferredModel::gemini_flash(
+        recovery_generation,
+        Effort::High,
+    ));
+    let recoveries = match (first_recovery, final_recovery) {
+        (Some(medium), Some(high)) => [
+            RecoveryModel::Selected(medium),
+            RecoveryModel::Selected(high),
+        ],
+        (Some(model), None) | (None, Some(model)) => {
+            [RecoveryModel::Selected(model), RecoveryModel::Disabled]
+        }
+        (None, None) => [RecoveryModel::Disabled, RecoveryModel::Disabled],
+    };
+    ContentModels {
+        primary,
+        recoveries,
     }
 }
 

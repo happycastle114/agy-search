@@ -3,7 +3,7 @@
 use std::{collections::HashSet, net::IpAddr, str::FromStr};
 
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use url::{Host, Url};
 
 use crate::{error::AgyError, types::HttpUrl};
@@ -13,6 +13,14 @@ const MAX_RESTRICTIONS: usize = 20;
 #[derive(Clone, Debug, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(transparent)]
 pub(crate) struct SourceDomain(String);
+
+impl<'de> Deserialize<'de> for SourceDomain {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer)?
+            .parse()
+            .map_err(D::Error::custom)
+    }
+}
 
 impl SourceDomain {
     pub(crate) fn as_str(&self) -> &str {

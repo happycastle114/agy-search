@@ -32,7 +32,9 @@ fn reports_package_version_without_downstream_agy() {
     let assertion = command.arg("--version").assert();
 
     // Then: version discovery succeeds without launching Antigravity
-    assertion
-        .success()
-        .stdout(predicate::eq("agy-search 0.3.1\n"));
+    assertion.success().stdout(predicate::eq(concat!(
+        "agy-search ",
+        env!("CARGO_PKG_VERSION"),
+        "\n"
+    )));
 }

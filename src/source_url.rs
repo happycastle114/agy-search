@@ -32,7 +32,7 @@ pub(crate) enum HttpScheme {
 }
 
 impl HttpScheme {
-    fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value {
             "http" => Some(Self::Http),
             "https" => Some(Self::Https),
