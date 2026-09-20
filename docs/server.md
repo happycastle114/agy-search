@@ -97,8 +97,11 @@ and AGY discovery, and defaults to 120 seconds. A request body for `/search` or
 `/mcp` defaults to 131,072 bytes and can be configured from 1,024 through
 1,048,576 with `--body-limit-bytes`.
 
-The server uses structured diagnostics on stderr. MCP stdio keeps stdout for
-protocol NDJSON only. Do not redirect stderr into a stdio MCP client.
+The server uses structured diagnostics on stderr. MCP SDK diagnostics are
+disabled even when `RUST_LOG` enables debug or trace, because those events can
+contain request/response payloads and client metadata. Sanitized application
+errors and HTTP status/latency logs remain available. MCP stdio keeps stdout
+for protocol NDJSON only. Do not redirect stderr into a stdio MCP client.
 
 ## LiteLLM Search provider
 
